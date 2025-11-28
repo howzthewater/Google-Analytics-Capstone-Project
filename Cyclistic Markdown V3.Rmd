@@ -1,0 +1,3340 @@
+---
+title: "Google Analytics Capstone Project: How does a bike share navigate speedy success?"
+author: "Aaron Liu"
+date: "2025-11-27"
+output: html_document
+---
+
+# Introduction
+
+Google's Data Analytics Certificate covers basics skills needed for data analysis, including spreadsheets (with an emphasis on Google Sheets), SQL, Tableau, and the programming language R. At the end of course, students are directed to put together a capstone project, which is a case study that allows for students to practice/demonstrate skills learned throughout the course.
+
+The Capstone Project is self-directed: Students have the opportunity to come up with their own area of exploration, or can choose from one of two pre-existing premises. The project is also optional -- Google will allow for you to skip through these sections and still obtain a certificate. Otherwise, Google advises students to anticipate spending around a week putting together the project in order to complete the course. In my case, however, I ended up spending a few months on the case study. Specifically, I found the extra time helpful to up-skill both on SQL (which I had used previously, but not to the extent required for this project) as well as R (which I had no experience with prior to taking the course).
+
+For my project, I chose "Case Study 1: How does a bike share navigate speedy success?" This premise re-purposes real-world data supplied by Divvy Bikes, Chicago’s bike-share program, as the basis for a theoretical case study relating to a fictional bike-share company, “Cyclistic” and how said company can leverage ride-level data to grow ride membership: *"The director of marketing believes the company’s future success depends on maximizing the number of annual memberships... your team wants to understand how casual riders and annual members use Cyclistic bikes differently."*
+
+Using the above prompt, we can derive two key objectives we need to accomplish with the subsequent investigation:
+
+1.  Identify how riders and annual members use bikes differently.
+
+2.  Use these insights to identify opportunities for converting casual riders to annual members.
+
+## Project Steps
+
+To answer these questions, the following workflow was adopted to preparing and processing Divvy's bikeshare data.
+
+-   Download monthly data from Divvy via [divvy-tripdata](https://divvy-tripdata.s3.amazonaws.com/index.html).
+
+-   Upload monthly data onto [MotherDuck](https://app.motherduck.com/), a cloud data warehouse, then use SQL to clean, process and analyze the data set.
+
+-   Import aggregate data into R Studio, then use R to further transform data for visualization and findings.
+
+For analysis, ride trends were measured by calculating several key metrics: ride count, average distance per ride, average ride duration, and bike-type distribution. These metrics were evaluated across multiple time frames:
+
+-   Overall (12 months).
+
+-   Per quarter.
+
+-   Per day of week.
+
+-   Per hour of day.
+
+-   Distance bucket: Per 100 meter segment.
+
+-   Time bucket: Per minute elapsed.
+
+Additionally, geospatial heat maps were created to explore ride count within the context of these time frames:
+
+-   Overall (12 months).
+
+-   By quarter.
+
+-   By day of week.
+
+-   By hour of day.
+
+With this framework in mind, the first step was to compile the raw dataset.
+
+# Processing The Data
+
+## Compiling The Raw Dataset
+
+Google instructs users to process the .csv’s using Google Sheets and/or Microsoft Excel. However, the .csv’s supplied by Divvy were too large to process using Google Workspace tools, as they exceeded Google [internal cap](https://www.thebricks.com/resources/guide-how-to-bypass-google-sheets-import-limit) on spreadsheet imports. To work around upload limitations, I ended up using SQL for data cleaning, processing and aggregation. Specifically, the cloud data warehouse MotherDuck offers a free plan that allows for 10 GB of storage, which was enough to accommodate for the scope of the joined data.
+
+Using MotherDuck, I was able to upload month-by-month data supplied by Divvy. I then used SQL to create a master table for my raw dataset called *divvytripdata*. As time progressed and new datasets were released by Divvy, I downloaded those .csvs and appended the new monthly data to the raw dataset. Ultimately, I compiled a table consisting of all of my raw data called *divvytripdata*, which ended up comprising of 8.5+ million results. Below is query that I used to generate the initial raw table:
+
+``` sql
+CREATE OR REPLACE TABLE divvytripdata AS (
+  SELECT
+    *
+  FROM
+    divvytripdata_202407
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202408
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202409
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202410
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202411
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202412
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202501
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202502
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202503
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202504
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202505
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202506
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202507
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202508
+  UNION ALL
+  SELECT
+    *
+  FROM 
+    divvytripdata_202509
+  UNION ALL
+  SELECT
+    *
+  FROM
+    divvytripdata_202510
+)
+```
+
+## Exploring The Raw Data
+
+I then proceeded to explore my raw dataset using SQL. As a first step, I queried for null values, outlier values, and tested for duplicate values relating to station IDs in particular.
+
+Here are metrics from the raw data set:
+
+**🆔 Ride ID:** Data on Ride IDs appears to be complete.
+
+-   ✅ Results in data set: 8,511,437
+
+-   ✅ Unique Ride IDs: 8,511,437
+
+-   ✅ Null Ride IDs: 0
+
+**🚲 Vehicle Type:** Data appears to be complete. No major cleaning required.
+
+-   ✅ Unique values for vehicle types: 2 (Electric Bikes, Classic Bikes)
+
+-   ✅ Null values for vehicle types: 0
+
+**🚴 Rider Type:** Data appears to be complete. No major cleaning required.
+
+-   ✅ Unique values for member_casual column: 2 (Member group, Casual Rider group)
+
+-   ✅ Null values for member_casual: 0
+
+**🪧 Station Names/Station IDs:** Duplicate station names + duplicate station IDs will need to be transformed in order to ensure that station IDs correlate to specific station names. However, null values will not be filtered out of the data set, as null values comprise a significant portion of station name/ID values and removal may introduce bias in results.
+
+-   🚨 Number of unique starting stations logged by name: 1,969
+
+-   🚨 Number of unique starting stations logged by station ID: 3,498
+
+-   🚨 Number of ending stations logged by name: 1,973
+
+-   🚨 Number of ending stations logged by station ID: 3,517
+
+-   🚨 Number of null values for starting stations (same values for both name and ID): 1,740,714
+
+-   🚨 Number of null values for ending stations (same value for both name and ID): 1,740,714
+
+**🌎 Geo-location Coordinates:** Unlike station names/IDs, there are only a handful of end coordinates with null values – null values can be safely filtered out. End longitude coordinates exhibit outliers well outside of range of the Chicago Metropolitan area, suggesting faulty data that will need to be filtered. Lastly, decimal precision ranges from broad to precise – coordinate decimals can benefit from normalization as well.
+
+-   ✅ Number of null starting coordinates: 0
+
+-   🚨 Number of null ending coordinates: 8,899
+
+-   Starting latitude:
+
+    -   ✅ Range: 41.64 to 42.07
+
+    -   🚨 Decimal precision: 1 to 15
+
+-   Starting longitude
+
+    -   ✅ Range: -87.91 to -87.52
+
+    -   🚨 Decimal precision: 1 to 14
+
+-   Ending latitude
+
+    -   🚨 Range: 16.06 to 87.96
+
+    -   🚨 Decimal precision: 1 to 15
+
+-   Range for ending longitude:
+
+    -   🚨 Range: -144.05 to 87.96
+
+    -   🚨 Decimal precision: 1 to 14
+
+**⏱️ Ride Times:** Minimum ride time show as a negative value, suggesting faulty data that will need to be cleaned at this stage. Maximum Ride Time elapses for more than a day, suggesting outliers that could skew overall metrics.
+
+-   🚨 Minimum Ride Time: -56:01:302
+
+-   🚨 Maximum Ride Time: 02:14:54:011
+
+## Inconsistent Station Names/IDs
+
+### Station Names
+
+I then drafted further queries to identify inconsistent station names per station ID, then visually reviewed the results. These queries produced 238 unique station names where the associated station ID referenced multiple names. Root causes appeared to stem from the following:
+
+1.  Spelling, formatting and special characters.
+
+2.  Public bike racks sharing the same station IDs as regular stations.
+
+For these set of stations, I also pulled total rides per station and found that some of the stations exhibited ridership numbers in the tens of thousands -- this convinced me that the safest course of action was to transform these station names to resolve naming inconsistencies, rather than removing them outright from the data-set.
+
+``` sql
+--This table explores station IDs in raw dataset to ensure start station names are unique to ID.
+
+WITH dupes AS (
+  SELECT
+    start_station_id,
+    COUNT(DISTINCT start_station_name) AS distinct_station_names
+  FROM google_data_analytics.divvytripdata
+  GROUP BY start_station_id
+  HAVING COUNT(DISTINCT start_station_name) > 1
+)
+
+SELECT
+  d.start_station_id,
+  d.start_station_name,
+  COUNT(*) AS rider_count
+FROM google_data_analytics.divvytripdata d
+INNER JOIN dupes 
+  ON dupes.start_station_id = d.start_station_id
+GROUP BY d.start_station_id, d.start_station_name
+ORDER BY d.start_station_id, d.start_station_name
+
+--This table explores end station IDs in raw dataset to ensure end start station names are unique to ID.
+
+WITH dupes AS (
+  SELECT
+    end_station_id,
+    COUNT(DISTINCT end_station_name) AS distinct_station_names
+  FROM google_data_analytics.divvytripdata
+  GROUP BY end_station_id
+  HAVING COUNT(DISTINCT end_station_name) > 1
+)
+
+SELECT
+  d.end_station_id,
+  d.end_station_name,
+  COUNT(*) AS rider_count
+FROM google_data_analytics.divvytripdata d
+INNER JOIN dupes 
+  ON dupes.end_station_id = d.end_station_id
+GROUP BY d.end_station_id, d.end_station_name
+ORDER BY d.end_station_id, d.end_station_name
+```
+
+### Station IDs
+
+I also queried for duplicate station IDs per station name. These queries returned 3,256 unique starting station IDs that shared a common name, and 3,286 unique end station IDs that shared a common name.
+
+``` sql
+--This query assesses stations with exact station name matches, but duplicate start_station_ids
+WITH dupes AS (
+  SELECT
+    start_station_name,
+    COUNT(DISTINCT start_station_id) AS distinct_station_ids
+  FROM google_data_analytics.divvytripdata
+  GROUP BY start_station_name
+  HAVING COUNT(DISTINCT start_station_id) > 1
+)
+
+SELECT
+  d.start_station_id,
+  d.start_station_name,
+  COUNT(*) AS rider_count,
+  COUNT(DISTINCT d.start_station_id) OVER (PARTITION BY d.start_station_name) as distinct_id_count
+FROM google_data_analytics.divvytripdata d
+INNER JOIN dupes 
+  ON dupes.start_station_name = d.start_station_name
+GROUP BY d.start_station_id, d.start_station_name
+ORDER BY distinct_id_count, d.start_station_name, d.start_station_id desc
+
+--This query assesses end stations with exact station name matches, but duplicate end_station_ids
+WITH dupes AS (
+  SELECT
+    end_station_name,
+    COUNT(DISTINCT end_station_id) AS distinct_station_ids
+  FROM google_data_analytics.divvytripdata
+  GROUP BY end_station_name
+  HAVING COUNT(DISTINCT end_station_id) > 1
+)
+
+SELECT
+  d.end_station_id,
+  d.end_station_name,
+  COUNT(*) AS rider_count,
+  COUNT(DISTINCT d.end_station_id) OVER (PARTITION BY d.end_station_name) as distinct_id_count
+FROM google_data_analytics.divvytripdata d
+INNER JOIN dupes 
+  ON dupes.end_station_name = d.end_station_name
+GROUP BY d.end_station_id, d.end_station_name
+ORDER BY distinct_id_count, d.end_station_name, d.end_station_id desc
+```
+
+## Cleaning The Data
+
+To generate the cleaned dataset, I structured my query to include multiple common table expressions (CTE) that progressively worked to filter geospatial coordinates, time-length calculations, and redundancies in station names and station IDs.
+
+### Geo-location Data:
+
+Final geo-location data was cleaned using the Interquartile Range (IQR) method. Specifically, I wrote a series of CTE's that calculated the upper and lower bounds for geo-location coordinates within my data, then removed all results that were 1.5 times outside those calculated bounds. The intention here in applying IQR was two fold: 1. to remove erroneous coordinates and 2. to filter out general outliers as well so that down-the-line metrics more closely reflected general user behavior.
+
+### Ride Times
+
+Ride times were filtered partially using the Interquartile Range (IQR) method. In particular, ride lengths that were 1.5 times outside of the upper bound were removed. However, applying the IQR method did not produce useful results for lower bound filtering as ride lengths below this range registered as negative values.
+
+Here, I decided to set lower bound filtering manually at 60 seconds – with the rationale being that 60 seconds would exclude both errors in the data (negative ride time values) as well as ride times correlating to potential false starts.
+
+### Station Names
+
+To normalize station names, I utilized regular expression statements to convert station names to lower case, trim white space, as well as transforming specific string patterns that I had observed while exploring the raw data:
+
+-   Removed asterisks.
+
+-   Removed tab spaces.
+
+-   Removed instances of multiple white spaces.
+
+-   Removed the phrase "(temp)."
+
+While these transformations handled the majority of my Station Name cleaning work, they did not resolve cases where the corresponding station ID referred to station names with distinct string combinations (example: "navy pier" and "streeter dr & grand ave"). For these stations, I ended up investigating each case individually and determined which name to use based on ride count, as well as accuracy to actual addresses registered on Google Maps. I subsequently drafted a common table expression to manually transformed these station names line by line.
+
+### Station IDs
+
+For station IDs, duplicates were resolved in SQL by creating a new variable, `cleaned_station_x_id`, which assigned each station name the minimum corresponding station ID (`MIN`) after grouping by station name.
+
+### Final Statement
+
+Below is the query I wrote to create the cleaned dataset:
+
+``` sql
+--This first CTE determines Q1 and Q3 values for geolocation and ride length data within raw dataset. 
+CREATE OR REPLACE TABLE cyclistic as 
+WITH
+  quantiles as (
+    SELECT
+      member_casual,
+      QUANTILE(start_lat, 0.25) as Q1_start_lat,
+      QUANTILE(start_lat, 0.75) as Q3_start_lat,
+      QUANTILE(start_lng, 0.25) as Q1_start_lng,
+      QUANTILE(start_lng, 0.75) as Q3_start_lng,
+      QUANTILE(end_lat, 0.25) as Q1_end_lat,
+      QUANTILE(end_lat, 0.75) as Q3_end_lat,
+      QUANTILE(end_lng, 0.25) as Q1_end_lng,
+      QUANTILE(end_lng, 0.75) as Q3_end_lng,
+      QUANTILE(
+        EXTRACT (
+          EPOCH
+          FROM
+            date_trunc('second', ended_at) - date_trunc('second', started_at)
+        ),
+        0.75
+      ) as q3_ride_length,
+      QUANTILE(
+        EXTRACT (
+          EPOCH
+          FROM
+            date_trunc('second', ended_at) - date_trunc('second', started_at)
+        ),
+        0.25
+      ) as q1_ride_length
+    FROM
+      google_data_analytics.main.divvytripdata
+    GROUP BY member_casual
+  ),
+  
+  --2/3 IQR: This CTE determines IQR based on the results pulled from the first CTE. 
+  IQR as (
+    SELECT
+      *,
+      Q3_start_lat - Q1_start_lat as IQR_start_lat,
+      Q3_start_lng - Q1_start_lng as IQR_start_lng,
+      Q3_end_lat - Q1_end_lat as IQR_end_lat,
+      Q3_end_lng - Q1_end_lng as IQR_end_lng,
+      Q3_ride_length - Q1_ride_length as IQR_ride_length
+    FROM
+      quantiles
+  ),
+  
+  --3/3 IQR: This CTE returns upper and lower bounds based on results of the second CTE. 
+  bounds as (
+    SELECT
+      member_casual,
+      Q1_start_lat - (IQR_start_lat * 1.5) as lower_bound_start_lat,
+      Q3_start_lat + (IQR_start_lat * 1.5) as upper_bound_start_lat,
+      Q1_start_lng - (IQR_start_lng * 1.5) as lower_bound_start_lng,
+      Q3_start_lng + (IQR_start_lng * 1.5) as upper_bound_start_lng,
+      Q1_end_lat - (IQR_end_lat * 1.5) as lower_bound_end_lat,
+      Q3_end_lat + (IQR_end_lat * 1.5) as upper_bound_end_lat,
+      Q1_end_lng - (IQR_end_lng * 1.5) as lower_bound_end_lng,
+      Q3_end_lng + (IQR_end_lng * 1.5) as upper_bound_end_lng,
+      INTERVAL '1 second' * (Q1_ride_length - (IQR_ride_length * 1.5)) as lower_bound_ride_length,
+      INTERVAL '1 second' * (Q3_ride_length + (IQR_ride_length * 1.5)) as upper_bound_ride_length
+    FROM
+      IQR
+  ),
+  
+  --Now lets get to cleaning: Next, I want to clean up both station names and station IDs. 
+  --This CTE pulls from the raw dataset and uses regular expression to normalize names to lower case, and remove special characters.
+  --This CTE also grabs station IDs from the raw dataset for further processing down the line. 
+  reg_exp_start_station_names as (
+    SELECT
+      ride_id,
+      start_station_id,
+      end_station_id,
+      REGEXP_REPLACE(
+        REGEXP_REPLACE(LOWER(TRIM(start_station_name)), '\*|\t|\\t|\s*\(temp\)\s*', ''),
+        '\s+',
+        ' '
+      ) AS norm_start_station_name,
+      REGEXP_REPLACE(
+        REGEXP_REPLACE(LOWER(TRIM(end_station_name)), '\*|\t|\\t|\s*\(temp\)\s*', ''),
+        '\s+',
+        ' '
+      ) AS norm_end_station_name
+    FROM
+      google_data_analytics.main.divvytripdata
+  ),
+  
+  --This CTE pulls from prior CTE and cleans up station names for observed one-off cases.
+  --This CTE continues to pass the station IDs from the first CTE for further processing down the line. 
+  cleaned_station_names as (
+    SELECT
+      ride_id,
+      start_station_id,
+      end_station_id,
+      CASE norm_start_station_name
+        WHEN 'lowell ave & armitage' THEN 'lowell ave & armitage ave'
+        WHEN 'ada st & 113th st' THEN 'ada st & 113th place'
+        WHEN 'kedzie ave & 38th pl' THEN 'kedzie ave & 38th st'
+        WHEN 'damen ave & pierce ave' THEN 'damen ave & wicker park ave'
+        WHEN 'rainbow - beach' THEN 'rainbow beach'
+        WHEN 'milwaukee ave & the 606' THEN 'wabansia & milwaukee'
+        WHEN 'navy pier' THEN 'streeter dr & grand ave'
+        WHEN 'lasalle st & washington st corral n' THEN 'lasalle st & washington st corral'
+        WHEN 'archer & wentworth' THEN 'archer ave & wentworth ave'
+        WHEN 'milwaukee & fullerton' THEN 'milwaukee ave & fullerton ave'
+        WHEN 'damen ave & walnut (lake) st' THEN 'damen ave & lake st'
+        WHEN 'lasalle st & calhoun pl corral' THEN 'lasalle st & washington st corral'
+        WHEN 'madison st & wells st' THEN 'wells st & madison st'
+        WHEN 'hubbard st depot' THEN 'mtv hubbard st'
+        WHEN 'hastings st depot lws' THEN 'hastings lws'
+        WHEN 'halsted st & armitage ave' THEN 'burling st & armitage ave'
+        WHEN 'sedgwick st & chicago ave' THEN 'larrabee st & chicago ave'
+        ELSE norm_start_station_name
+      END AS cleaned_start_station_name,
+      CASE norm_end_station_name
+        WHEN 'lowell ave & armitage' THEN 'lowell ave & armitage ave'
+        WHEN 'ada st & 113th st' THEN 'ada st & 113th place'
+        WHEN 'kedzie ave & 38th pl' THEN 'kedzie ave & 38th st'
+        WHEN 'damen ave & pierce ave' THEN 'damen ave & wicker park ave'
+        WHEN 'rainbow - beach' THEN 'rainbow beach'
+        WHEN 'milwaukee ave & the 606' THEN 'wabansia & milwaukee'
+        WHEN 'navy pier' THEN 'streeter dr & grand ave'
+        WHEN 'lasalle st & washington st corral n' THEN 'lasalle st & washington st corral'
+        WHEN 'archer & wentworth' THEN 'archer ave & wentworth ave'
+        WHEN 'milwaukee & fullerton' THEN 'milwaukee ave & fullerton ave'
+        WHEN 'damen ave & walnut (lake) st' THEN 'damen ave & lake st'
+        WHEN 'lasalle st & calhoun pl corral' THEN 'lasalle st & washington st corral'
+        WHEN 'madison st & wells st' THEN 'wells st & madison st'
+        WHEN 'hubbard st depot' THEN 'mtv hubbard st'
+        WHEN 'hastings st depot lws' THEN 'hastings lws'
+        WHEN 'halsted st & armitage ave' THEN 'burling st & armitage ave'
+        WHEN 'sedgwick st & chicago ave' THEN 'larrabee st & chicago ave'
+        ELSE norm_end_station_name
+      END AS cleaned_end_station_name
+    FROM
+      reg_exp_start_station_names
+  ),
+ 
+  --This CTE consolidates starting ids with duplicate station names using an aggregate function (minimum).
+  cleaned_start_station_id as (
+    SELECT
+      csn.cleaned_start_station_name,
+      MIN(csn.start_station_id) AS cleaned_start_station_id
+    FROM
+      cleaned_station_names csn
+    GROUP BY
+      csn.cleaned_start_station_name
+  ),
+
+  --This CTE consolidates ending ids with duplicate station names using an aggregate function (minimum).
+  cleaned_end_station_id as (
+    SELECT
+      csn.cleaned_end_station_name,
+      MIN(csn.end_station_id) as cleaned_end_station_id
+    FROM
+      cleaned_station_names csn
+    GROUP BY
+      csn.cleaned_end_station_name
+  )
+
+--Now for the final query:
+
+SELECT
+  dtd.ride_id,
+  dtd.rideable_type,
+  dtd.started_at,
+  dtd.ended_at,
+  csn.cleaned_start_station_name, -- Removing asterisks from station names + removing tabs + removes tab string + removing consecutive whitespace + removing '(temp)'
+  CASE WHEN csn.cleaned_start_station_name LIKE 'public rack%' THEN 'public' || cssi.cleaned_start_station_id ELSE cssi.cleaned_start_station_id END AS cleaned_start_station_id, -- Concat P to beginning of cleaned station ID when station is a public rack
+  csn.cleaned_end_station_name, -- Removing asterisks from station names + removing tabs + removes tab string + removing consecutive whitespace + removing '(temp)'
+  CASE WHEN csn.cleaned_end_station_name LIKE 'public rack%' THEN 'public' || csei.cleaned_end_station_id ELSE csei.cleaned_end_station_id END AS cleaned_end_station_id, -- Concats P to beginning of cleaned station ID when station is a public rack
+  ROUND(start_lat, 6) as start_lat, -- Rounding lat/long points for consistency
+  ROUND(start_lng, 6) as start_lng, -- Rounding lat/long points for consistency
+  ROUND(end_lat, 6) as end_lat, -- Rounding lat/long points for consistency
+  ROUND(end_lng, 6) as end_lng, -- Rounding lat/long points for consistency
+  dtd.member_casual,
+  date_trunc('second', ended_at) - date_trunc('second', started_at) as ride_length -- Creating ride length column
+FROM
+  google_data_analytics.main.divvytripdata dtd
+  LEFT JOIN bounds b on b.member_casual = dtd.member_casual
+  LEFT JOIN cleaned_station_names csn ON csn.ride_ID = dtd.ride_id
+  LEFT JOIN cleaned_start_station_id cssi ON cssi.cleaned_start_station_name = csn.cleaned_start_station_name
+  LEFT JOIN cleaned_end_station_id csei ON csei.cleaned_end_station_name = csn.cleaned_end_station_name
+  --LEFT JOIN ride_length rl ON rl.ride_id = dtd.ride_id
+WHERE
+  dtd.end_lat IS NOT NULL -- removes NULL VALUES for END_LAT, to calculate distances
+  AND dtd.end_lng IS NOT NULL -- removes NULL VALUES for END_LNG, to calculate distances
+  AND ride_length > INTERVAL '60 SECOND' -- removes ride lengths less than a minute (filter out negative rides + false starts)
+  AND ride_length < b.upper_bound_ride_length -- Filtering out outlier ride_length values based on IQR upper bound calc
+  AND dtd.start_lat > b.lower_bound_start_lat -- Filtering out extreme outliers based on IQR calcs
+  AND dtd.start_lat < b.upper_bound_start_lat -- Filtering out extreme outliers based on IQR calcs
+  AND dtd.start_lng > b.lower_bound_start_lng -- Filtering out extreme outliers based on IQR calcs
+  AND dtd.start_lng < b.upper_bound_start_lng -- Filtering out extreme outliers based on IQR calcs
+  AND dtd.end_lat > b.lower_bound_end_lat --Filtering out extreme outliers based on IQR calcs
+  AND dtd.end_lat < b.upper_bound_end_lat -- Filtering out extreme outliers based on IQR calcs
+  AND dtd.end_lng > b.lower_bound_end_lng --Filtering out extreme outliers based on IQR calcs
+  AND dtd.end_lng < b.upper_bound_end_lng --Filtering out extreme outliers based on IQR calcs
+  AND dtd.started_at >= '2024-10-01 00:00:00' --Filtering out dates that occur outside of timeframe
+  AND dtd.started_at < '2025-11-01 00:00:00' --Filtering out dates that occur outside of timeframe
+  AND dtd.ended_at >= '2024-10-01 00:00:00' --Filtering out dates that occur outside of timeframe
+  AND dtd.ended_at < '2025-11-01 00:00:00' --Filtering out dates that occur outside of timeframe
+ORDER BY
+  dtd.ENDED_AT DESC
+;
+```
+
+### Assessing The Cleaned Data
+
+Once I had created the dataset, I used my previous queries to explore the cleaned data.
+
+**🆔 Ride ID:**
+
+-   ✅ Results in cleaned data set: 5,001,023
+
+-   ✅ Unique Ride IDs: 5,001,023
+
+-   ✅ Null Ride IDs: 0
+
+**🚲 Vehicle Type:**
+
+-   ✅ Unique values for vehicle types: 2 (electric bikes, classic bikes)
+
+-   ✅ Null values for vehicle types: 0
+
+**🚴 Rider Type:**
+
+-   ✅ Unique values for member_casual column: 2 (members, casual riders)
+
+-   ✅ Null values for member_casual: 0
+
+**🪧 Station Names/Station IDs:**
+
+-   ✅ Number of unique starting stations logged by name: 669
+
+-   ✅ Number of unique starting stations logged by station ID: 669
+
+-   ✅ Number of ending stations logged by name: 675
+
+-   ✅ Number of ending stations logged by station ID: 675
+
+-   🚨 Number of null values for starting stations (same values for both name and ID): 978,512
+
+-   🚨 Number of null values for ending stations (same value for both name and ID): 978,512
+
+**🌎 Geo-location Coordinates:**
+
+-   ✅ Number of null starting coordinates: 0
+
+-   ✅ Number of null ending coordinates: 0
+
+-   Starting latitude:
+
+    -   ✅ Range: 41.80839 to 42.001824
+
+    -   ✅ Decimal precision: 1 to 6
+
+-   Starting longitude
+
+    -   ✅ Range: -87.709189 to -87.58
+
+    -   ✅ Decimal precision: 1 to 6
+
+-   Ending latitude
+
+    -   ✅ Range: 41.808038 to 42.001785
+
+    -   ✅ Decimal precision: 1 to 6
+
+-   Range for ending longitude:
+
+    -   ✅ Range: -87.708887 to -87.58
+
+    -   ✅ Decimal precision: 1 to 6
+
+    **⏱️ Ride Times:**
+
+-   ✅ Minimum Ride Time: 00:01:00.03
+
+-   ✅ Maximum Ride Time: 00:44:48.921
+
+# Presenting The Data
+
+## Preparing The Metrics
+
+After creating the cleaned dataset, I took a two-stage approach towards analyzing the data.
+
+**Perform Calculations Using SQL:** First, I queried the data using SQL to generate tables with metrics pertaining to the following areas of focus:
+
+-   Overall data (12 months).
+
+-   Quarterly data.
+
+-   Day of week data.
+
+-   Hour of day data.
+
+-   Heat map data (per quarter, per day of week and per hour of day).
+
+-   Minute bucket data: (metrics per minute segment).
+
+-   Distance bucket data: (metrics per 100 meter segment).
+
+**Visualize Results Using R:** After calculating metrics using SQL, I then downloaded the results and imported them into R to create visualizations that explored ride counts, average distances, average times and vehicle distribution, as well as geospatial heat maps for ride concentration.
+
+### Knitr Code Chunk
+
+Below is the R knitr code chunk I drafted for my project: In addition to importing tables and calling specific R libraries for creating visualizations, my knitr code also defines universal functions for tooltip formatting.
+
+```{r setup, include=TRUE, echo = TRUE, warning = FALSE, message = FALSE, results = FALSE}
+knitr::opts_chunk$set(warning = FALSE, echo = TRUE)
+#install.packages("tidyverse")
+#install.packages("plotly")
+#install.packages("ggiraph", repos = "https://cloud.r-project.org/")
+#install.packages("leaflet")
+
+#Loads libraries
+
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(scales)
+library(ggiraph)
+library(leaflet)
+library(leaflet.extras)
+library(htmltools)
+library(purrr)
+
+#Writes CSVs to variables
+overall_metrics <- read_csv("overall_metrics_cyclistic_20251106.csv")
+quarterly_metrics <- read_csv("quarterly_metrics_cyclistic_20251106.csv")
+dow_metrics <- read_csv('dow_metrics_cyclistic_20251106.csv')
+hourly_metrics <- read_csv('hourly_metrics_cyclistic_20251106.csv')
+overall_heatmap_start_and_end <- read.csv("quarterly_heatmap_cyclistic_20251106.csv")
+dow_heatmap_start_and_end <- read.csv("dow_heatmap_cyclistic_20251106.csv")
+hour_of_day_heatmap_start_and_end <- read.csv("hourly_heatmap_cyclistic_20251106.csv")
+minute_by_minute_metrics <- read_csv("minute_by_minute_cyclistic_20251106.csv")
+meter_by_meter_metrics <- read_csv("meter_by_meter_cyclistic_20251106.csv")
+
+#Functions
+
+#Converts seconds to minutes
+minutes_from_seconds <- function(seconds){
+  return(sprintf("00:%02d:%02d", floor(seconds%/%60), round(seconds%%60)))
+}
+
+#Define ggiraph style universally:
+girafe_options <- list(opts_tooltip(css = "font-family: 'Helvetica'; font-size: 12px; background-color: #ffffff;"))
+
+titles <- function(input){
+  paste0("<i>", input, "</i>")
+}
+
+#Define tooltip terms universally:
+groups <- function(member_casual){
+  paste0("<br>Group: ", member_casual)
+}
+
+rides <- function(number){
+  paste0("<br>Rides: ", comma(round(number), 2))
+}
+
+distance_meters_avgs <-function(number){
+  paste0("<br>Average: ", comma(round(number), 2), " m</b>")
+}
+
+distance_meters_meds <-function(number){
+  paste0("<br>Median: ", comma(round(number), 2), " m")
+}
+
+distance_meters_stddevs <-function(number){
+  paste0("<br>Std. Dev: ±", comma(round(number), 2), " m")
+}
+
+time_minutes_avgs <-function(number){
+  paste0("<br>Average: ", (minutes_from_seconds(number)), "</b>")
+}
+
+time_minutes_meds <-function(number){
+  paste0("<br>Median: ", (minutes_from_seconds(number)))
+}
+
+time_minutes_stddevs <-function(number){
+  ifelse(
+    is.na(number), paste0("<br>Std. Dev: N/A"),
+    paste0("<br>Std. Dev: ", minutes_from_seconds(number))
+  )
+}
+
+percentages <- function(number){
+  paste0("<br>Percent: ", round(number, 2), "%")
+}
+
+global_percentages <- function(number){
+  paste0("<br>Global Percent: ", round(number, 2), "%")
+}
+
+scaled_percentages <- function(number){
+  paste0("<br>Scaled Percent: ", round(number, 2), "%")
+}
+
+ratios <- function(number, other_group){
+  ifelse(
+      is.na(number), paste0("<br>Ratio to ", other_group, ": N/A"),
+      paste0("<br>Ratio to ", other_group, ": ", round(number, 2), ":1")
+  )
+}
+
+times <- function(number){
+  sprintf("\nTime: %d %s", 
+    if_else(number %% 12 == 0, 12, number %% 12),
+    if_else(number < 12, "a.m.", "p.m.")
+  )
+}
+
+coordinates <- function(number1, number2){
+  paste0("<br>Coordinates: ", number1, ", ", number2)
+}
+
+minute_buckets <-function(number){
+  paste0("<br>Minutes: ", number)
+}
+
+distance_buckets <-function(number){
+  paste0("<br>Meters: ", number)
+}
+
+heatmap_multiplier <- 25
+
+```
+
+## Overall Metrics (12 Months)
+
+The following SQL query was used to calculate rides metrics across the entire dataset (12 months):
+
+```         
+INSTALL spatial;
+LOAD spatial;
+
+WITH total_count as (
+  SELECT 
+    COUNT(DISTINCT ride_id) as total
+  FROM cyclistic
+)
+
+SELECT
+  member_casual,
+  COUNT(DISTINCT ride_id) as num_of_rides,
+  SUM(CASE WHEN rideable_type = 'electric_bike' THEN 1 ELSE NULL END) as num_ebikes,
+  SUM(CASE WHEN rideable_type = 'classic_bike' THEN 1 ELSE NULL END) as num_cbikes,
+  ROUND(AVG(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_avg,
+  ROUND(MEDIAN(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_med,
+  ROUND(STDDEV(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_stddev, 
+  ROUND(AVG(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_avg,
+  ROUND(MEDIAN(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_med,
+  ROUND(STDDEV(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_stddev
+FROM
+  cyclistic c
+CROSS JOIN
+  total_count tc 
+GROUP BY member_casual, tc.total
+```
+
+The results from the above query were then used to generate visualizations for the following metrics:
+
+-   Ride Concentration (12 Months)
+
+-   Average Distance (12 Months)
+
+-   Average Time (12 Months)
+
+-   Bike Distribution (12 Months)
+
+### Ride Concentration (12 Months)
+
+The following R code chunk visualizes ride counts for members and casual riders over 12 months.
+
+```{r}
+total_rides_by_member_type <- overall_metrics %>%
+  select(member_casual, num_of_rides)  %>%
+  mutate(
+    multiplier_vs_other_group = round(
+      case_when(
+        member_casual == "member" ~ num_of_rides/num_of_rides[member_casual == "casual"],
+        member_casual == "casual" ~ num_of_rides/num_of_rides[member_casual == "member"])
+      , 2),
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    percent = round((num_of_rides / sum(num_of_rides) * 100), 1),
+    member_casual = recode(member_casual, "member" = "Members", "casual" = "Casual Riders"),
+    tooltip =  paste0(
+      titles("Total Rides By Rider Type (12 Months)"),
+      groups(member_casual), 
+      percentages(percent), 
+      rides(num_of_rides), 
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(aes(x = 2, y = num_of_rides, fill = member_casual, tooltip = tooltip)) +
+    geom_bar_interactive(stat = "identity", width = 1) +
+    coord_polar(theta = "y") +
+    theme_void() +
+    xlim(0.5, 2.5) +
+    labs(title = "Total Rides By Member Type", fill = "Rider Type") +
+    scale_fill_brewer(palette = "Set2",
+                    labels = c("Casual Rider", "Members")) +
+    theme_void(base_family = "Helvetica")
+
+total_rides_by_member_type <- girafe(ggobj = total_rides_by_member_type, options = girafe_options)
+
+total_rides_by_member_type
+```
+
+**Discussion:** Members outnumber casual riders within our dataset. Specifically, member rides account for 65% of all rides within the dataset, with 3.2 million trips logged. Casual riders, in the meantime, account for 35% of all rides observed, and account for 1.8 million logged trips.
+
+Our dataset is unevenly distributed when it comes to rider type counts. As such, percentages for subsequent metrics will be based on each rider group’s population.
+
+### Average Distance (12 Months)
+
+The R code chunk below visualizes average distance within each rider group, and includes hover text that highlights median distance, standard deviation, as well as comparative ratios derived from the averages for each rider group.
+
+```{r}
+average_distance_by_rider_type <- overall_metrics %>%
+  select(member_casual, distance_meters_avg, distance_meters_stddev, distance_meters_med) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ distance_meters_avg/distance_meters_avg[member_casual == "casual"],
+      member_casual == "casual" ~ distance_meters_avg/distance_meters_avg[member_casual == "member"])
+    , 2),
+  other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"
+  ),
+    member_casual = recode(member_casual, "member" = "Members", "casual" = "Casual Riders"),
+    tooltip_label = paste0(
+      titles("Distance By Rider Type (12 Months)"),
+      groups(member_casual), 
+      distance_meters_avgs(distance_meters_avg), 
+      distance_meters_meds(distance_meters_med), 
+      distance_meters_stddevs(distance_meters_stddev), 
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(
+    aes(
+      x = member_casual,
+      y = distance_meters_avg,
+      fill = member_casual,
+      tooltip = tooltip_label
+    )
+  ) +
+  geom_bar_interactive(stat = "identity") +
+  labs(title = "Average Distance By Member Type",
+       x = "Rider Type",
+       y = "Average Meters",
+       fill = "Rider Type") +
+  theme_minimal(base_family = "Helvetica")
+
+average_distance_by_rider_type <- girafe(ggobj = average_distance_by_rider_type, options = girafe_options)
+
+average_distance_by_rider_type
+```
+
+**Discussion:** Both rider groups register similar distance metrics across the board. Lower median values suggest that both member and casual rider trips tend to take shorter distance trips. A wide standard deviation suggests that for both parties, trip distances are variable in nature, rather than consistent.
+
+### Average Time (12 Months)
+
+The R code chunk below charts average time in seconds while containing hover text that includes average, median and standard deviation time values in minutes, alongside comparative ratios to highlight scope of difference between rider group averages.
+
+```{r}
+average_time_by_rider_type <- overall_metrics %>%
+  select(member_casual, time_seconds_avg, time_seconds_med, time_seconds_stddev) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ time_seconds_avg/time_seconds_avg[member_casual == "casual"],
+      member_casual == "casual" ~ time_seconds_avg/time_seconds_avg[member_casual == "member"])
+    , 2),
+    other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"
+  ),
+    member_casual = recode(member_casual, "member" = "Members", "casual" = "Casual Riders"),
+    tooltip_label = paste0(
+      titles("Time Spent By Rider Type (12 Months)"),
+      groups(member_casual),
+      time_minutes_avgs(time_seconds_avg),
+      time_minutes_meds(time_seconds_med),
+      time_minutes_stddevs(time_seconds_stddev),
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(
+    aes(
+      x = member_casual,
+      y = time_seconds_avg,
+      fill = member_casual,
+      tooltip = tooltip_label
+    )
+  ) +
+  geom_bar_interactive(stat = "identity") +
+  labs(title = "Average Time By Member Type",
+       x = "Rider Type",
+       y = "Seconds",
+       fill = "Rider Type") +
+  ylim(0, 900) +
+  theme_minimal(base_family = "Helvetica")
+
+average_time_by_rider_type <- girafe(ggobj = average_time_by_rider_type, options = girafe_options)
+
+average_time_by_rider_type 
+```
+
+**Discussion:** Unlike distances, ride times show divergent behavior between the two groups. Specifically, casual riders tend to take longer trips with more variation, while member trips as a whole are shorter and more consistent.
+
+### Bike Distribution (12 Months)
+
+The R code chunk below visualizes distribution of rides by bike type within each rider group, and includes hover text that exposes percentage, raw count and comparative ratio to the other group.
+
+```{r}
+ride_type_distribution_by_rider_type <- overall_metrics %>%
+  select(member_casual, num_ebikes, num_cbikes) %>%
+  pivot_longer(
+    cols = c(num_ebikes, num_cbikes),
+    names_to = "ride_type",
+    values_to = "ride_count"
+  ) %>%
+  group_by(member_casual)%>%
+  mutate(
+    percent = round(100 * (ride_count / sum(ride_count)), 1)
+  )%>%
+  ungroup()%>%
+  group_by(ride_type)%>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ percent/percent[member_casual == "casual"],
+      member_casual == "casual" ~ percent/percent[member_casual == "member"])
+    , 2)
+  )%>%
+  ungroup()%>%
+  group_by(member_casual)%>%
+  mutate(
+    other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"
+    ),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    ride_type = recode(
+      ride_type,
+      "num_cbikes" = "Classic Bikes",
+      "num_ebikes" = "Electric Bikes"
+    ),
+    label = paste0(percent, "%\n(", ride_count, ")"),
+    tooltip_label = paste0(
+      titles(paste0(ride_type, " (12 Months)")),
+      groups(member_casual), 
+      percentages(percent),
+      rides(ride_count), 
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(aes(
+    x = 2,
+    y = percent,
+    fill = ride_type,
+    tooltip = tooltip_label
+  )) +
+  geom_bar_interactive(stat = "identity") +
+  coord_polar(theta = "y") +
+  xlim(1, 2.5) +
+  facet_wrap(~ member_casual) +
+  theme_void(base_family = 'Helvetica') +
+  labs(title = "Ride Type Distribution By Rider Type",
+       x = "Ride Type",
+       y = "Percent",
+       fill = "Rider Type")
+
+ride_type_distribution_by_rider_type <- girafe(ggobj = ride_type_distribution_by_rider_type, options = girafe_options)
+
+ride_type_distribution_by_rider_type
+```
+
+**Discussion:** Overall, both rider groups show similar bike-type distributions that favor electric bikes. Specifically, electric bike rides comprise nearly 63 percent of all member rides and 65 percent of all casual rider trips. Classic bike rides, meanwhile, make up 37 percent of member ride and 35 percent of casual rides.
+
+## Quarterly Metrics
+
+The following SQL query was used to generate metrics per quarter of the year, as defined below:
+
+-   Q1: January 1 - March 31
+
+-   Q2: April 1 - June 30
+
+-   Q3: July 1 - September 30
+
+-   Q4: October 1 - December 31
+
+```         
+INSTALL spatial;
+
+LOAD spatial;
+
+SELECT
+  QUARTER(ended_at) as q,
+  c.member_casual,
+  COUNT(DISTINCT ride_id) as num_of_rides,
+  --SUM(CASE WHEN rideable_type = 'electric_scooter' THEN 1 ELSE 0 END) as num_scooters,
+  SUM(CASE WHEN rideable_type = 'electric_bike' THEN 1 ELSE 0 END) as num_ebikes,
+  SUM(CASE WHEN rideable_type = 'classic_bike' THEN 1 ELSE 0 END) as num_cbikes,
+  ROUND(AVG(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_avg,
+  ROUND(MEDIAN(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_med,
+  ROUND(STDDEV(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_stddev, 
+  ROUND(AVG(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_avg,
+  ROUND(MEDIAN(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_med,
+  ROUND(STDDEV(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_stddev
+FROM
+  cyclistic c
+GROUP BY
+  QUARTER(ended_at), c.member_casual
+  --, total_member_count, mc.num_scooters, mc.num_ebike, mc.num_cbike
+ORDER BY 
+  c.member_casual, q
+```
+
+The results from the above query were then transferred into R, at which point individual plots were created to visualize the following metrics:
+
+-   Ride Concentration (Per Quarter)
+
+-   Average Distance (Per Quarter)
+
+-   Average Time (Per Quarter)
+
+-   Bike Distribution (Per Quarter)
+
+### Ride Concentration (Per Quarter)
+
+The following code chunk visualizes ride distribution per quarter between the member groups, and includes hover text that shows percentage values within each rider group, as well as ride count and comparative ratios based on the percentage values.
+
+Note on percentages: Because our dataset is unevenly distributed when it comes to rider type, percentages represent the concentration of rides within each rider group, and not of rides as a whole.
+
+```{r concentration_of_rides_per_quarter}
+concentration_of_rides_per_quarter <- quarterly_metrics %>%
+  select(member_casual, q, num_of_rides) %>%
+  group_by(member_casual) %>%
+  mutate(
+    percent = round((num_of_rides / sum(num_of_rides)) * 100, 2)
+  )%>%
+  ungroup()%>%
+  group_by(q) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+      case_when(
+        member_casual == "member" ~ percent/percent[member_casual == "casual"],
+        member_casual == "casual" ~ percent/percent[member_casual == "member"])
+      , 2)
+  )%>%
+    ungroup()%>%
+  group_by(member_casual)%>%
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    q = recode(
+      q,
+      "1" = "Jan-Mar",
+      "2" = "Apr-June",
+      "3" = "July-Sept",
+      "4" = "Oct-Dec"
+    ),
+    q = factor(q, levels =c("Jan-Mar", "Apr-June", "July-Sept", "Oct-Dec")),
+    tooltip_label = paste0(
+      titles(paste0("Total Rides By Member Type (", q, ")")), 
+      groups(member_casual),
+      rides(num_of_rides), 
+      percentages(percent),
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  )%>%
+  ggplot(aes(
+    x = q,
+    y = percent,
+    fill = q,
+    tooltip = tooltip_label
+  )) +
+  geom_col_interactive() +
+  labs(title = "Concentration Of Rides Per Quarter", y = "Percent", fill =
+         "Quarter") +
+  facet_wrap( ~ member_casual) +
+  coord_cartesian(clip = "off") +
+  ylim(0, 80) +
+  theme_minimal(base_family = 'Helvetica')
+
+concentration_of_rides_per_quarter <- girafe(ggobj = concentration_of_rides_per_quarter, options = girafe_options)
+
+concentration_of_rides_per_quarter
+```
+
+**Discussion:** Casual riders appear to exhibit more variability in ride behavior, specifically with seasonality. Meanwhile, members ridership is more consistent throughout the year.
+
+For both rider groups, ride counts share a similar bell-shaped distribution where concentration is most active around late summer (Q3/July-September) and least active during the winter season (Q1/January-March).
+
+However, for the casual rider group, the differences between quarters are more extreme, while for members, the differences are more steady.
+
+Additionally, Q4 registers a slightly larger portion of member activity (30 percent of all rides) compared to casual rider activity (26 percent of rides). This is a pattern that appears in subsequent visualizations as well.
+
+### Average Distance (Per Quarter)
+
+The following R code chunk below visualizes average distance per quarter for both rider groups, and includes median values, standard deviation values and comparative ratios for the corresponding time segment within the other group.
+
+```{r average_distance_per_quarter}
+average_distance_per_quarter <- quarterly_metrics %>%
+  select(member_casual, q, distance_meters_avg, distance_meters_med, distance_meters_stddev) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ distance_meters_avg/distance_meters_avg[member_casual == "casual"],
+      member_casual == "casual" ~ distance_meters_avg/distance_meters_avg[member_casual == "member"])
+    , 2)
+  ) %>%
+  ungroup()%>%
+  group_by(member_casual, q) %>%
+  mutate(
+    other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    q = recode(q, "1" = "Jan-Mar", "2" = "Apr-June", "3" = "July-Sept", "4" = "Oct-Dec"),
+    q = factor(q, levels = rev(c("Jan-Mar", "Apr-June", "July-Sept", "Oct-Dec"))),
+    label = paste0(distance_meters_avg, " m"),
+    tooltip_label = paste0(
+      titles(paste0("Distance By Rider Type (", q, ")")),
+      groups(member_casual), 
+      distance_meters_avgs(distance_meters_avg), 
+      distance_meters_meds(distance_meters_med), 
+      distance_meters_stddevs(distance_meters_stddev), 
+      ratios(multiplier_vs_other_group, other_group)
+      )
+    
+  ) %>%
+  ggplot(aes(x = q, y = distance_meters_avg, fill = member_casual, tooltip = tooltip_label)) +
+  geom_col_interactive(position = "dodge") +
+  labs(title = "Average Distance Per Quarter",
+       y = "Meters",
+       x = "Quarter",
+       fill = "Rider Type") +
+  coord_flip(clip = "off") +
+  theme_minimal(base_family = 'Helvetica')
+
+average_distance_per_quarter <- girafe(ggobj = average_distance_per_quarter, options = girafe_options)
+
+average_distance_per_quarter
+```
+
+**Discussion:** Quarterly results mirror the overall dataset in that both groups travel roughly the same distances. Analyzing ride distance data by quarter, however, exposes a degree of seasonality within our dataset. Specifically, both rider groups take shorter distance trips during winter seasons (Q1 and Q4), and longer distance trips during summer months (Q2 and Q3).
+
+### Average Time (Per Quarter)
+
+The following R code chunk charts average times per quarter, and includes hover text that shows median values, standard deviation values, as well as comparative ratios.
+
+```{r average_time_per_quarter}
+
+average_time_per_quarter <- quarterly_metrics %>%
+  select(member_casual, q, time_seconds_avg, time_seconds_med, time_seconds_stddev) %>%
+  group_by(q)%>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ time_seconds_avg/time_seconds_avg[member_casual == "casual"],
+      member_casual == "casual" ~ time_seconds_avg/time_seconds_avg[member_casual == "member"])
+    , 2)
+  )%>%
+  ungroup() %>%
+  group_by(member_casual, q) %>%
+  mutate(
+    other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    q = recode(
+      q,
+      "1" = "Jan-Mar",
+      "2" = "Apr-June",
+      "3" = "July-Sept",
+      "4" = "Oct-Dec"
+    ),
+    q = factor(q, levels = c(
+      "Jan-Mar", "Apr-June", "July-Sept", "Oct-Dec"
+    )),
+    label = paste0(time_seconds_avg, " s"),
+    tooltip_label = paste0(
+  titles(paste0("Time Spent By Rider Type (", q, ")")),
+  groups(member_casual), 
+  time_minutes_avgs(time_seconds_avg), 
+  time_minutes_meds(time_seconds_med), 
+  time_minutes_stddevs(time_seconds_stddev), 
+  ratios(multiplier_vs_other_group, other_group)
+)
+  ) %>%
+  ggplot(aes(x = q, y = time_seconds_avg, fill = member_casual, tooltip = tooltip_label)) +
+  geom_col_interactive(position = "dodge") +
+  ylim(0, 1000) +
+  labs(title = "Average Time Per Quarter",
+       y = "Seconds",
+       x = "Quarter",
+       fill = "Rider Type")+
+  theme_minimal(base_family = 'Helvetica')
+
+average_time_per_quarter <- girafe(ggobj = average_time_per_quarter, options = girafe_options)
+  
+average_time_per_quarter
+```
+
+**Discussion:** For all quarters, casual riders register longer trip durations than members; median ride times skewing lower for both rider groups; and standard deviations scoring higher for casual riders vs. members, suggesting a higher degree of time variability within casual rider trips.
+
+Additionally, quarterly ride time metrics show similar seasonality to that of quarterly distance metrics. Winter months (Q1 and Q4) register shorter times across the board for both rider groups, while summer months (Q2 and Q3) register longer trips.
+
+Furthermore, it is worth noting that the spread between quarterly ride times is slightly greater for casual riders vs. members. This, coupled with lower standard deviation values for members, falls in line with prior observations on casual ride behavior being more variable in nature, vs. member behavior, which is more consistent.
+
+### Bike Distribution (Per Quarter)
+
+Like with our quarterly concentration rates, bike distribution rates have been adjusted to reflect rides within each rider type, rather than as a whole (which would bias our dataset towards members).
+
+```{r}
+ride_type_per_quarter <- quarterly_metrics %>%
+  select(member_casual, q, num_ebikes, num_cbikes) %>%
+  pivot_longer(
+    cols = c(num_ebikes, num_cbikes),
+    names_to = "ride_type",
+    values_to = "bike_count"
+  ) %>%
+  group_by(member_casual, ride_type) %>%
+  mutate(
+    percent = round(bike_count / sum(bike_count) * 100, 2)
+  )%>%
+  ungroup()%>%
+  group_by(ride_type)%>%
+  mutate(multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ percent/percent[member_casual == "casual"],
+      member_casual == "casual" ~ percent/percent[member_casual == "member"])
+    , 2)
+  )%>%
+  ungroup()%>%
+  group_by(member_casual, ride_type) %>%
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    member_casual = recode(member_casual, "casual" = "Casual Riders", "member" = "Members"),
+    ride_type = recode(
+      ride_type,
+      "num_cbikes" = "Classic Bikes",
+      "num_ebikes" = "Electric Bikes"
+    ),
+    q = recode(
+      q,
+      "1" = "Jan-Mar",
+      "2" = "Apr-June",
+      "3" = "July-Sept",
+      "4" = "Oct-Dec"
+    ),
+    q = factor(q, levels = c(
+      "Jan-Mar", "Apr-June", "July-Sept", "Oct-Dec"
+    )),
+    label = if_else(
+      bike_count > 0,
+      paste0(q, ":\n", percent, "%\n(", comma(bike_count), ")"),
+      NA_character_
+    ),
+    tooltip_label = paste0(
+      titles(paste0(ride_type, " by Rider Type (", q, ")")),
+      groups(member_casual), 
+      percentages(percent),
+      rides(bike_count), 
+      ratios(multiplier_vs_other_group, other_group)
+)
+
+  )
+
+bikes_per_quarter <- ride_type_per_quarter %>%
+  ggplot(aes(x = q, y = percent, fill = member_casual, tooltip = tooltip_label)) +
+  geom_bar_interactive(stat = "identity", position="dodge") +
+  facet_wrap(~ride_type, ncol=1) +
+  labs(title = "Bike Ride Distribution Per Quarter",
+       y = "Percent",
+       x = "Quarter",
+       fill = "Rider Type")
+
+bikes_per_quarter <- girafe(ggobj = bikes_per_quarter, options = girafe_options)
+
+bikes_per_quarter
+```
+
+**Discussion:** Within both rider groups and both bike types, the highest concentration of rides occur during summer months (Q3), and the lowest concentration occur during the winter months (Q4). However, fall/winter seasons (Q1, Q4) show a greater concentration rate for members in comparison to casual riders – this is consistent across both bike types. Meanwhile, for spring/summer seasons (Q2, Q3), this relation is flipped – in terms of concentration of rides within each rider group, more casual rides occur during these time periods vs. members.
+
+Between the bike types, electric bikes register a larger difference in concentration rates. Classic bikes, meanwhile, show comparatively more consistent activity between quarters. For both bike types, the rate difference in the casual rider group is more pronounced than the rate difference within the member group, which is more steady.
+
+## Day Of Week Metrics
+
+Now let's explore ride data per day of week. Below is the SQL query that was used to generate these metrics.
+
+```         
+INSTALL spatial;
+
+LOAD spatial;
+
+SELECT
+  DAYOFWEEK(ended_at) as day_num,
+  DAYNAME(ended_at) as day_name,
+  c.member_casual,
+  COUNT(DISTINCT ride_id) as num_of_rides,
+  --SUM(CASE WHEN rideable_type = 'electric_scooter' THEN 1 ELSE NULL END) as num_scooters,
+  SUM(CASE WHEN rideable_type = 'electric_bike' THEN 1 ELSE NULL END) as num_ebikes,
+  SUM(CASE WHEN rideable_type = 'classic_bike' THEN 1 ELSE NULL END) as num_cbikes,
+  ROUND(AVG(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_avg,
+  ROUND(MEDIAN(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_med,
+  ROUND(STDDEV(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_stddev, 
+  ROUND(AVG(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_avg,
+  ROUND(MEDIAN(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_med,
+  ROUND(STDDEV(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_stddev
+
+FROM
+  cyclistic c
+GROUP BY 
+  c.member_casual, day_num, day_name
+ORDER BY 
+  c.member_casual, day_num asc 
+```
+
+The results from the above query were then used to create visualizations for the following metrics:
+
+-   Ride Concentration (DOW)
+
+-   Average Distance (DOW)
+
+-   Average Time (DOW)
+
+-   Bike Distribution (DOW)
+
+### Ride Concentration (DOW)
+
+The following R code chunk visualizes ride concentration by day of week, with hover text exposing percentages, ride count and comparative ratios. Consistent with our quarterly percentage calculations, day-of-week rates have been derived from ride totals within each rider group.
+
+```{r}
+rider_concentration_per_day_of_week <- dow_metrics %>%
+  select(day_num, day_name, member_casual, num_of_rides) %>%
+  group_by(member_casual) %>%
+  mutate(
+    percent = round((num_of_rides / sum(num_of_rides)) * 100, 1)
+  )%>%
+  ungroup(member_casual) %>%
+  group_by(day_name) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ percent/percent[member_casual == "casual"],
+      member_casual == "casual" ~ percent/percent[member_casual == "member"])
+    , 2)
+    )%>%
+  ungroup%>%
+  group_by(member_casual)%>%
+  mutate(
+    other_group = case_when(member_casual == "member" ~ "Casual Riders", member_casual == "casual" ~ "Members"),
+    member_casual = recode(member_casual, "member" = "Members", "casual" = "Casual Riders"),
+    tooltip_label = paste0(
+  titles(paste0("Total Rides By Member Type (", day_name, ")")), 
+  groups(member_casual),
+  rides(num_of_rides), 
+  percentages(percent),
+  ratios(multiplier_vs_other_group, other_group)
+),
+    day_name = recode( day_name, "Monday" = "Mon", "Tuesday" = "Tue", "Wednesday" = "Weds", "Thursday" = "Thurs", "Friday" = "Fri", "Saturday" = "Sat", "Sunday" = "Sun"),
+    day_name = factor(day_name, levels = c("Mon", "Tue", "Weds", "Thurs", "Fri", "Sat", "Sun")),
+  ) %>%
+  ggplot(aes(x = day_name, y = percent, fill = member_casual, tooltip = tooltip_label)) +
+  geom_col_interactive(position = "dodge") +
+  facet_wrap( ~ member_casual) +
+  ylim(0, 25) +
+  labs(title = "Day Of Week Ridership",
+       x = "Day Of Week",
+       y = "Percent",
+       fill = "Rider Type")
+
+rider_concentration_per_day_of_week <- girafe(ggobj = rider_concentration_per_day_of_week, options = girafe_options)
+
+rider_concentration_per_day_of_week
+```
+
+**Discussion:** Member are more active on weekdays (Monday through Thursday), while casual riders are more active on weekends (Friday through Sunday). Additionally, casual rider activity exhibits greater variability throughout the week, while member concentration is more consistent.
+
+### Average Distance (DOW)
+
+The following R code chunk below visualizes average distance per day of week, and includes median values, standard deviation values and comparative ratios in the hover text.
+
+```{r}
+average_distance_per_day_of_week <- dow_metrics %>%
+  select(member_casual, day_name, distance_meters_avg, distance_meters_med, distance_meters_stddev) %>%
+  mutate(
+    multiplier_vs_other_group = round(case_when(
+      member_casual == "member" ~ distance_meters_avg/distance_meters_avg[member_casual == "casual"],
+      member_casual == "casual" ~ distance_meters_avg/distance_meters_avg[member_casual == "member"]), 2
+      ),
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders", 
+      member_casual == "casual" ~ "Members"
+      ),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    day_name = factor(day_name, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    label = paste0(distance_meters_avg, "(m)"),
+    tooltip_label = paste0(
+  titles(paste0("Distance By Rider Type (", day_name, ")")),
+  groups(member_casual), 
+  distance_meters_avgs(distance_meters_avg), 
+  distance_meters_meds(distance_meters_med), 
+  distance_meters_stddevs(distance_meters_stddev), 
+  ratios(multiplier_vs_other_group, other_group)),
+  day_name = recode(day_name, "Monday" = "Mon", "Tuesday" = "Tue", "Wednesday" = "Weds", "Thursday" = "Thurs", "Friday" = "Fri", "Saturday" = "Sat", "Sunday" = "Sun")
+  ) %>%
+  ggplot(aes(
+    x = day_name,
+    y = distance_meters_avg,
+    fill = member_casual,
+    group = member_casual,
+    tooltip = tooltip_label
+  )) +
+  geom_col_interactive(position = "dodge") +
+  labs(title = "Average Distance Per Day Of Week",
+       y = "Meters",
+       x = "Day Of Week",
+       fill = "Rider Type") +
+  theme_minimal(base_family = 'Helvetica')
+
+average_distance_per_day_of_week <- girafe(ggobj = average_distance_per_day_of_week, options = girafe_options)
+
+average_distance_per_day_of_week
+```
+
+**Discussion:** Similar to our quarterly distance metrics, average distances remain consistent for both rider groups throughout the week. Medians for both rider groups are lower than their corresponding averages, indicating that our dataset is skewed towards shorter rides. High standard deviation values show that high variability for ride distances within the dataset.
+
+### Average Time (DOW)
+
+The following R code chunk below visualizes average time per day of week and includes median values, standard deviation values and comparative ratios in the hover text.
+
+```{r}
+average_ride_time_per_day_of_week <- dow_metrics %>%
+  select(member_casual, day_name, time_seconds_avg, time_seconds_med, time_seconds_stddev) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ time_seconds_avg/time_seconds_avg[member_casual == "casual"],
+      member_casual == "casual" ~ time_seconds_avg/time_seconds_avg[member_casual == "member"])
+    , 2),
+    other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"
+  ),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    day_name = factor(
+      day_name,
+      levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    ),
+    label = paste0(time_seconds_avg, "\n(s)"),
+    tooltip_label = paste0(
+  titles(paste0("Time Spent By Rider Type (", day_name, ")")),
+  groups(member_casual), 
+  time_minutes_avgs(time_seconds_avg), 
+  time_minutes_meds(time_seconds_med), 
+  time_minutes_stddevs(time_seconds_stddev), 
+  ratios(multiplier_vs_other_group, other_group)
+),
+  day_name = recode(
+      day_name,
+      "Monday" = "Mon",
+      "Tuesday" = "Tue",
+      "Wednesday" = "Weds",
+      "Thursday" = "Thurs",
+      "Friday" = "Fri",
+      "Saturday" = "Sat",
+      "Sunday" = "Sun"
+    )
+)%>%
+  ggplot(aes(x = day_name, y = time_seconds_avg, fill = member_casual, tooltip = tooltip_label)) +
+  geom_col_interactive(position = "dodge") +
+  labs(title = "Average Ride Time Per Day Of Week",
+       y = "Seconds",
+       x = "Day Of Week",
+       fill = "Rider Type") +
+  ylim(0, 1000)
+
+average_ride_time_per_day_of_week <- girafe(ggobj = average_ride_time_per_day_of_week, options = girafe_options)
+average_ride_time_per_day_of_week
+```
+
+**Discussion:** Casual rides register longer ride times and exhibit more variability between days, with weekends in particular logging the longest trips. By contrast, member rides take less time and time elapsed does not show much variability depending on day of week.
+
+### Bike Distribution (DOW)
+
+The following R code chunk visualizes bike type distribution for each rider group per day of week and includes hover text that shows percentage of rides within each rider group, as well as ride totals and comparative ratios.
+
+```{r}
+dow_ride_type <- dow_metrics %>%
+  select(member_casual, day_name, num_ebikes, num_cbikes) %>%
+  pivot_longer(
+    cols = c(num_ebikes, num_cbikes),
+    names_to = "ride_type",
+    values_to = "bike_count"
+  ) %>%
+  group_by(member_casual, ride_type) %>%
+  mutate(
+    percent = round((bike_count / sum(bike_count)) * 100, 2)
+  ) %>%
+  ungroup()%>%
+  group_by(ride_type) %>%
+  mutate(
+    multiplier_vs_other_group = round(
+    case_when(
+      member_casual == "member" ~ percent/percent[member_casual == "casual"],
+      member_casual == "casual" ~ percent/percent[member_casual == "member"])
+    , 2)
+)%>%
+  ungroup()%>%
+  group_by(member_casual, ride_type) %>% 
+  mutate(
+    other_group = case_when (
+    member_casual == "member" ~ "Casual Riders",
+    member_casual == "casual" ~ "Members"
+  ),
+    ride_type = recode(
+      ride_type,
+      "num_cbikes" = "Classic Bikes",
+      "num_ebikes" = "Electric Bikes"
+    ),
+    member_casual = recode(member_casual, member = "Members", casual = "Casual Riders"),
+    day_name = recode(
+      day_name,
+      "Monday" = "Mon",
+      "Tuesday" = "Tue",
+      "Wednesday" = "Weds",
+      "Thursday" = "Thurs",
+      "Friday" = "Fri",
+      "Saturday" = "Sat",
+      "Sunday" = "Sun"
+    ),
+    day_name = factor(
+      day_name,
+      levels = c("Mon", "Tue", "Weds", "Thurs", "Fri", "Sat", "Sun")
+    ),
+    label = paste0(percent, "%\n(", comma(bike_count), ")"),
+    tooltip_label = paste0(
+  titles(paste0(ride_type, " by Rider Type (", day_name, ")")),
+  groups(member_casual), 
+  percentages(percent),
+  rides(bike_count), 
+  ratios(multiplier_vs_other_group, other_group)
+)
+    )
+
+dow_bike_type <- dow_ride_type %>%
+  ggplot(aes(x = day_name, y = percent, fill = member_casual, tooltip = tooltip_label)) +
+  geom_col_interactive(position = position_dodge(width = 0.9)) +
+  facet_wrap(~ride_type, ncol=1) +
+  labs(title = "Bike Type Ride Distribution Per Day Of Week",
+       y = "Percent",
+       x = "Day Of Week",
+       fill = "Rider Type")
+
+dow_bike_type <- girafe(ggobj = dow_bike_type, options = girafe_options)
+
+dow_bike_type
+```
+
+**Discussion:** Both bike types mirror the rider group patterns found when segmenting rides by day of week – member rides are more concentrated on weekdays, while casual rides occur more often on weekends. For both bike types, casual rider rates are more variable throughout the week, while member ridership is more steady – this is another pattern that is consistent with earlier findings.
+
+For both rider groups, however, classic bikes rates show more variability throughout the week, while electric bikes rides remain relatively more consistent. This is an opposite trend when compared to bike distribution per quarter, where electric bikes showed more variability, and classic bikes were more stable, depending on quarter.
+
+## Hour Of Day Metrics
+
+The following query was used to generate hour of day metrics.
+
+```         
+INSTALL spatial;
+
+LOAD spatial;
+
+SELECT
+  EXTRACT(hour from ended_at) as hour_of_day,
+  c.member_casual,
+  COUNT(DISTINCT ride_id) as num_of_rides,
+  --SUM(CASE WHEN rideable_type = 'electric_scooter' THEN 1 ELSE NULL END) as num_scooters,
+  SUM(CASE WHEN rideable_type = 'electric_bike' THEN 1 ELSE NULL END) as num_ebikes,
+  SUM(CASE WHEN rideable_type = 'classic_bike' THEN 1 ELSE NULL END) as num_cbikes,
+  ROUND(AVG(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_avg,
+  ROUND(MEDIAN(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_med,
+  ROUND(STDDEV(EXTRACT(EPOCH FROM ride_length)), 2) as time_seconds_stddev, 
+  ROUND(AVG(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_avg,
+  ROUND(MEDIAN(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_med,
+  ROUND(STDDEV(
+    ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))
+  ), 2) AS distance_meters_stddev
+
+FROM
+  cyclistic c
+GROUP BY 
+  hour_of_day, c.member_casual
+ORDER BY 
+  c.member_casual, hour_of_day asc
+```
+
+The results from the above query were then used to create visualizations for the following metrics:
+
+-   Ride Concentration (Per Hour)
+
+-   Average Distance (Per Hour)
+
+-   Average Time (Per Hour)
+
+-   Bike Distribution (Per Hour)
+
+### Ride Concentration (Per Hour)
+
+The following R code chunk visualizes ride concentration per hour of day for both rider groups – green areas represent hours where member activity is more concentrated, while red areas represent hours where casual rider activity is more dominant. Hover text, meanwhile, shows for each hour segment the percentage of rides within the rider group, total ride counts and comparative ratios.
+
+```{r}
+rides_per_hour_of_day <- hourly_metrics %>%
+  select(hour_of_day, member_casual, num_of_rides) %>%
+  mutate(
+    formatted_member_casual = (recode(member_casual, 
+                                      "member" = "Members",
+                                      "casual" = "Casual Riders")
+                               ),
+    formatted_times = times(hour_of_day), #commits hours to table before wider pivot
+    formatted_groups = groups(formatted_member_casual) #commits member/casual to table before wider pivot
+  )%>%
+  group_by(member_casual) %>%
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    percent = round((num_of_rides / sum(num_of_rides)) * 100, 2), #calculates percent in relation to rider group population
+     )%>%
+  ungroup() %>% #ungroups to allow for the wide pivot
+  select(hour_of_day, member_casual, percent, num_of_rides, other_group, formatted_times, formatted_groups) %>%  #selects columns for wide pivot
+  pivot_wider(names_from = member_casual,
+              values_from = c(percent, num_of_rides, formatted_times, formatted_groups, other_group)) %>% #pivots data so that member is the member percent, and casual is the casual percent
+  mutate(
+    casual_ribbon_min = if_else(
+      percent_casual > percent_member,
+      percent_member,
+      percent_casual
+    ),
+    #Always return a value, and the else value will make the ribbon 0 height since it will equal the line value
+    casual_ribbon_max = if_else(
+      percent_casual > percent_member,
+      percent_casual,
+      percent_casual
+    ),
+    member_ribbon_min = if_else(
+      percent_member > percent_casual,
+      percent_casual,
+      percent_member
+    ),
+    member_ribbon_max = if_else(
+      percent_member > percent_casual,
+      percent_member,
+      percent_member
+    ),
+    member_over_casual_ratio = round(percent_member / percent_casual, 2),
+    casual_over_member_ratio = round(percent_casual / percent_member, 2),
+    member_text_point = paste0(
+    titles("Total Rides By Rider Type (Hourly)"),
+      formatted_times_member,
+      formatted_groups_member,
+      percentages(percent_member),
+      rides(num_of_rides_member),
+      ratios(member_over_casual_ratio, other_group_member)
+    ),
+    casual_text_point = paste0(
+    titles("Total Rides By Rider Type (Hourly)"),
+      formatted_times_casual,
+      formatted_groups_casual,
+      percentages(percent_casual),
+      rides(num_of_rides_casual),
+      ratios(casual_over_member_ratio, other_group_casual)
+    )
+  ) %>%
+  ggplot(aes(x = hour_of_day)) +
+  geom_ribbon_interactive(
+    aes(ymin = casual_ribbon_min, ymax = casual_ribbon_max),
+    fill = "#F8766D",
+    alpha = 0.8
+  ) +
+  geom_ribbon_interactive(
+    aes(ymin = member_ribbon_min, ymax = member_ribbon_max),
+    fill = "#00BFC4",
+    alpha = 0.8
+  ) +
+  geom_point_interactive(aes(y = percent_member, tooltip = member_text_point), size = 6, alpha = 0) +
+  geom_point_interactive(aes(y = percent_casual, tooltip = casual_text_point), size = 6, alpha = 0) +
+  geom_line(aes(y = percent_member, group = 1)) +
+  geom_line(aes(y = percent_casual, group = 1)) +
+  scale_x_continuous(
+    breaks = seq(0, 23, by = 3),
+    minor_breaks = 0:23,
+    labels = function(x)
+      sprintf("%02d:00", x)
+  ) +
+  labs(title = "Rides Per Hour Of Day", y = "Percent", x = "Time") +
+  theme_minimal(base_family = "Helvetica")
+
+rides_per_hour_of_day <- girafe(ggobj = rides_per_hour_of_day, options = list(
+  opts_tooltip(css =
+                 "font-family: Helvetica;
+                                                               font-size: 12px;
+                                                               background-color: #ffffff;")
+))
+rides_per_hour_of_day
+```
+
+**Discussion:** For both rider groups, the majority of rides occur in the afternoon between 2:00 p.m. to 8:00 p.m., with overall ride activity peaking at 5:00 p.m. – here member concentration slightly outpaces casual rider activity.
+
+While afternoon hours shows congruent behavior between the rider groups, member activity peaks at 8:00 a.m. at twice the rate of concentration as casual rider activity. By contrast, casual ridership shows an increase between the hours of 10:00 a.m. to 4:00 p.m., a time period where member rides are less concentrated.
+
+### Average Distance (Per Hour)
+
+The following R code chunk visualizes average distances per hour segment and includes hover text showing median values, standard deviation values and comparative ratios. Similar to our ride concentration plot, green indicates hours where average distances are longer for members than casual riders, while red indicates hours where average distances are longer for casual riders than members.
+
+```{r}
+hourly_average_distance <- hourly_metrics %>% 
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    formatted_member_casual = recode(member_casual, 
+                                      "member" = "Members",
+                                      "casual" = "Casual Riders"),
+    formatted_times = times(hour_of_day), #commits hours to table before wider pivot
+    formatted_groups = groups(formatted_member_casual) #commits member/casual to table before wider pivot
+)%>%
+  select(hour_of_day, member_casual, distance_meters_avg, distance_meters_med, distance_meters_stddev, formatted_times, formatted_groups, other_group) %>%
+  pivot_wider(names_from = member_casual,
+              values_from = c(distance_meters_avg, distance_meters_med, distance_meters_stddev, formatted_times, formatted_groups, other_group)) %>%
+  mutate(
+    member_over_casual_ratio = round(distance_meters_avg_member/distance_meters_avg_casual, 2),
+    casual_over_member_ratio = round(distance_meters_avg_casual/distance_meters_avg_member, 2),
+    member_text_point = paste0(
+      titles("Ride Times Per Rider Type (Hourly)"),
+      formatted_times_member,
+      formatted_groups_member,
+      distance_meters_avgs(distance_meters_avg_member),
+      distance_meters_meds(distance_meters_med_member),
+      distance_meters_stddevs(distance_meters_stddev_member),
+      ratios(member_over_casual_ratio, other_group_member)
+    ),
+    casual_text_point = paste0(
+      titles("Ride Times Per Rider Type (Hourly)"),
+      formatted_times_casual,
+      formatted_groups_casual,
+      distance_meters_avgs(distance_meters_avg_casual),
+      distance_meters_meds(distance_meters_med_casual),
+      distance_meters_stddevs(distance_meters_stddev_casual),
+      ratios(casual_over_member_ratio, other_group_casual)
+    ),
+    casual_ribbon_min = if_else(
+      distance_meters_avg_casual > distance_meters_avg_member,
+      distance_meters_avg_member,
+      distance_meters_avg_casual
+    ),
+    #Logic: Always return a value. Else value will make the ribbon 0 height since it will equal the line value.
+    casual_ribbon_max = if_else(
+      distance_meters_avg_casual > distance_meters_avg_member,
+      distance_meters_avg_casual,
+      distance_meters_avg_casual
+    ),
+    member_ribbon_min = if_else(
+      distance_meters_avg_member > distance_meters_avg_casual,
+      distance_meters_avg_casual,
+      distance_meters_avg_member
+    ),
+    member_ribbon_max = if_else(
+      distance_meters_avg_member > distance_meters_avg_casual,
+      distance_meters_avg_member,
+      distance_meters_avg_member
+    )
+  ) %>%
+  ggplot(aes(x=hour_of_day))+
+    geom_line(aes(y = distance_meters_avg_member))+
+    geom_line(aes(y = distance_meters_avg_casual))+
+    geom_ribbon_interactive(
+      aes(ymin = casual_ribbon_min, ymax = casual_ribbon_max),
+      fill = "#F8766D",
+      alpha = 0.8
+    ) +
+    geom_ribbon_interactive(
+      aes(ymin = member_ribbon_min, ymax = member_ribbon_max),
+      fill = "#00BFC4",
+      alpha = 0.8
+    ) +
+    geom_point_interactive(aes(y = distance_meters_avg_member, tooltip = member_text_point), size = 6, alpha = 0)+
+    geom_point_interactive(aes(y = distance_meters_avg_casual, tooltip = casual_text_point), size = 6, alpha = 0)+
+    scale_x_continuous(
+      breaks = seq(0, 23, by = 3),
+      minor_breaks = 0:23,
+      labels = function(x)
+      sprintf("%02d:00", x)
+    )+
+    labs(title = "Average Distance Per Hour Of Day", x="Hour of Day", y = "Meters")+
+    theme_minimal(base_family = 'Helvetica')+
+    ylim(0, 2000)
+
+hourly_average_distance <- girafe(hourly_average_distance, 
+       ggobj = hourly_average_distance,
+       options = girafe_options)
+
+hourly_average_distance
+```
+
+**Discussion:** Member trip distances are slightly longer during the morning hours, mirroring the pattern seen in hourly ride concentration. Distances for members then drop around midday, at which point casual riders become more dominant. Overall, though, the two groups remain fairly close throughout the day. By the 6:00 p.m. peak, their average trip distances are nearly identical.
+
+### Average Time (Per Hour)
+
+The following R code chunk visualizes average ride times per hour of day and includes median values, standard deviation values and comparative ratios in the hover text. Again, green indicates hours where average ride times are longer for members, while red indicates hours where ride times are longer for casual riders.
+
+```{r}
+
+hourly_average_time <- hourly_metrics %>% 
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    formatted_member_casual = recode(member_casual, 
+                                      "member" = "Members",
+                                      "casual" = "Casual Riders"),
+    formatted_times = times(hour_of_day), #commits hours to table before wider pivot
+    formatted_groups = groups(formatted_member_casual) #commits member/casual to table before wider pivot
+)%>%
+  select(hour_of_day, member_casual, time_seconds_avg, time_seconds_med, time_seconds_stddev, formatted_times, formatted_groups, other_group) %>%
+  pivot_wider(names_from = member_casual,
+              values_from = c(time_seconds_avg, time_seconds_med, time_seconds_stddev, formatted_times, formatted_groups, other_group)) %>%
+  mutate(
+    member_over_casual_ratio = round(time_seconds_avg_member/time_seconds_avg_casual, 2),
+    casual_over_member_ratio = round(time_seconds_avg_casual/time_seconds_avg_member, 2),
+    member_text_point = paste0(
+      titles("Ride Times Per Rider Type (Hourly)"),
+      formatted_times_member,
+      formatted_groups_member,
+      time_minutes_avgs(time_seconds_avg_member),
+      time_minutes_meds(time_seconds_med_member),
+      time_minutes_stddevs(time_seconds_stddev_member),
+      ratios(casual_over_member_ratio, other_group_member)
+    ),
+    casual_text_point = paste0(
+      titles("Ride Times Per Rider Type (Hourly)"),
+      formatted_times_casual,
+      formatted_groups_casual,
+      time_minutes_avgs(time_seconds_avg_casual),
+      time_minutes_meds(time_seconds_med_casual),
+      time_minutes_stddevs(time_seconds_stddev_casual),
+      ratios(member_over_casual_ratio, other_group_casual)
+    ),
+    casual_ribbon_min = if_else(
+      time_seconds_avg_casual > time_seconds_avg_member,
+      time_seconds_avg_member,
+      time_seconds_avg_casual
+    ),
+    #horrifying logic but basically, always return a value, and the else value will make the ribbon 0 height since it will equal the line value
+    casual_ribbon_max = if_else(
+      time_seconds_avg_casual > time_seconds_avg_member,
+      time_seconds_avg_casual,
+      time_seconds_avg_casual
+    ),
+    member_ribbon_min = if_else(
+      time_seconds_avg_member > time_seconds_avg_casual,
+      time_seconds_avg_casual,
+      time_seconds_avg_member
+    ),
+    member_ribbon_max = if_else(
+      time_seconds_avg_member > time_seconds_avg_casual,
+      time_seconds_avg_member,
+      time_seconds_avg_member
+    )
+  ) %>%
+  ggplot(aes(x=hour_of_day))+
+  geom_line(aes(y = time_seconds_avg_member))+
+  geom_line(aes(y = time_seconds_avg_casual))+
+  geom_ribbon_interactive(
+    aes(ymin = casual_ribbon_min, ymax = casual_ribbon_max),
+    fill = "#F8766D",
+    alpha = 0.8
+  ) +
+  geom_ribbon_interactive(
+    aes(ymin = member_ribbon_min, ymax = member_ribbon_max),
+    fill = "#00BFC4",
+    alpha = 0.8
+  ) +
+  geom_point_interactive(aes(y = time_seconds_avg_member, tooltip = member_text_point), size = 6, alpha = 0)+
+  geom_point_interactive(aes(y = time_seconds_avg_casual, tooltip = casual_text_point), size = 6, alpha = 0)+
+  scale_x_continuous(
+    breaks = seq(0, 23, by = 3),
+    minor_breaks = 0:23,
+    labels = function(x)
+      sprintf("%02d:00", x)
+  )+
+  labs(title = "Average Time Per Hour Of Day", x="Hour of Day", y = "Meters")+
+  theme_minimal(base_family = 'Helvetica')+
+  ylim(0, 1100)
+
+hourly_average_time <- girafe(hourly_average_time, 
+                                  ggobj = hourly_average_time,
+                                  options = girafe_options)
+
+hourly_average_time
+```
+
+**Discussion:** Across the board, casual riders continue to take longer trips than members. However, the gap between the two groups is narrower in the morning and widens later in the day. Casual ride times also show a wider range overall, whereas member ride times remain comparatively steady throughout the day.
+
+### Bike Distribution (Per Hour)
+
+The following R code chunk below visualizes rides per hour segment for each bike type, within each bike group. Hover text contains percentages within rider groups, as well as total counts and comparative ratios. Green indicates hours where concentration of rides is higher members, while red indicates hours where concentration is higher for casual riders.
+
+```{r}
+hourly_ride_type <- hourly_metrics %>% 
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    formatted_member_casual = recode(member_casual, 
+                                      "member" = "Members",
+                                      "casual" = "Casual Riders"),
+    formatted_times = times(hour_of_day), #commits hours to table before wider pivot
+    formatted_groups = groups(formatted_member_casual) #commits member/casual to table before wider pivot
+  )%>%
+  select(hour_of_day, member_casual, num_ebikes, num_cbikes, formatted_times, formatted_groups, other_group) %>%
+  group_by(member_casual) %>%
+  mutate(
+         num_cbikes = replace_na(num_cbikes, 0),
+         num_ebikes = replace_na(num_ebikes, 0),
+         ebike_percent = round(num_ebikes/sum(num_ebikes) * 100, 2),
+         cbike_percent = round(num_cbikes/sum(num_cbikes) * 100, 2),
+         ) %>%
+  ungroup() %>%
+  select(hour_of_day, member_casual, ebike_percent, cbike_percent, num_ebikes, num_cbikes, formatted_times, formatted_groups, other_group) %>%
+  pivot_wider(
+    names_from = member_casual,
+    values_from = c(num_cbikes, num_ebikes, ebike_percent, cbike_percent, formatted_times, formatted_groups, other_group)
+    ) %>%
+  mutate(
+    #Ribbon Calcuations For Casual Riders
+    casual_ebike_ribbon_min = if_else(ebike_percent_casual > ebike_percent_member, ebike_percent_member, ebike_percent_casual),
+    casual_ebike_ribbon_max = ebike_percent_casual,
+    casual_cbike_ribbon_min = if_else(cbike_percent_casual > cbike_percent_member, cbike_percent_member, cbike_percent_casual),
+    casual_cbike_ribbon_max = cbike_percent_casual) %>%
+    #Ribbon Calculations For Members
+  mutate(
+    member_ebike_ribbon_min = if_else(ebike_percent_member > ebike_percent_casual, ebike_percent_casual, ebike_percent_member),
+    member_ebike_ribbon_max = ebike_percent_member,
+    member_cbike_ribbon_min = if_else(cbike_percent_member > cbike_percent_casual, cbike_percent_casual, cbike_percent_member),
+    member_cbike_ribbon_max = cbike_percent_member,
+  ) %>%
+    #Calculates Ratio Values
+  mutate(
+    ebike_member_over_casual_ratio = round(ebike_percent_member / ebike_percent_casual, 2),
+    ebike_casual_over_member_ratio = round(ebike_percent_casual / ebike_percent_member, 2),
+    cbike_member_over_casual_ratio = round(cbike_percent_member / cbike_percent_casual, 2),
+    cbike_casual_over_member_ratio = round(cbike_percent_casual / cbike_percent_member, 2)
+  ) %>%
+    #Create Labels
+  mutate(
+    ebike_casual_text_point = paste0(
+      "Total Rides By Electric Bikes (Hourly)",
+       formatted_groups_casual,
+       formatted_times_casual,
+       percentages(ebike_percent_casual),
+       rides(num_ebikes_casual),
+       ratios(ebike_casual_over_member_ratio, other_group_casual)
+    ),
+    ebike_member_text_point = paste0(
+      "Total Rides By Electric Bikes (Hourly)",
+       formatted_groups_member,
+       formatted_times_member,
+       percentages(ebike_percent_member),
+       rides(num_ebikes_member),
+       ratios(ebike_member_over_casual_ratio, other_group_member)
+    ),
+    cbike_casual_text_point = paste0(
+      "Total Rides By Classic Bikes (Hourly)",
+       formatted_groups_casual,
+       formatted_times_casual,
+       percentages(cbike_percent_casual),
+       rides(num_cbikes_casual),
+       ratios(cbike_casual_over_member_ratio, other_group_casual)
+    ),
+    cbike_member_text_point = paste0(
+      "Total Rides By Classic Bikes (Hourly)",
+       formatted_groups_member,
+       formatted_times_member,
+       percentages(cbike_percent_member),
+       rides(num_cbikes_member),
+       ratios(cbike_member_over_casual_ratio, other_group_member)
+    )
+  )
+    
+  hourly_cbike <- hourly_ride_type %>% ggplot(aes(x=hour_of_day))+
+    geom_line(aes(y=cbike_percent_casual))+
+    geom_line(aes(y=cbike_percent_member))+
+    geom_ribbon(aes(ymin= casual_cbike_ribbon_min, ymax = casual_cbike_ribbon_max), fill= "#F8766D", alpha = 0.8)+
+    geom_ribbon(aes(ymin= member_cbike_ribbon_min, ymax = member_cbike_ribbon_max), fill= "#00BFC4", alpha = 0.8)+
+    geom_point_interactive(aes(y=cbike_percent_member, tooltip=cbike_member_text_point), size = 6, alpha = 0)+
+    geom_point_interactive(aes(y=cbike_percent_casual, tooltip=cbike_casual_text_point), size = 6, alpha = 0)+
+    scale_x_continuous(
+      breaks = seq(0, 23, by = 3),
+      minor_breaks = 0:23,
+      labels = function(x)
+        sprintf("%02d:00", x)
+    )+
+    labs(title = "Classic Bike Rides Per Hour", x = "Time Of Day", y = "Percent")+
+    theme_minimal(base_family = 'Helvetica')
+  
+  hourly_ebike <- hourly_ride_type %>% ggplot(aes(x=hour_of_day))+
+    geom_line(aes(y=ebike_percent_casual))+
+    geom_line(aes(y=ebike_percent_member))+
+    geom_ribbon(aes(ymin= casual_ebike_ribbon_min, ymax = casual_ebike_ribbon_max), fill= "#F8766D", alpha = 0.8)+
+    geom_ribbon(aes(ymin= member_ebike_ribbon_min, ymax = member_ebike_ribbon_max), fill= "#00BFC4", alpha = 0.8)+
+    geom_point_interactive(aes(y=ebike_percent_member, tooltip=ebike_member_text_point), size = 6, alpha = 0)+
+    geom_point_interactive(aes(y=ebike_percent_casual, tooltip=ebike_casual_text_point), size = 6, alpha = 0)+ scale_x_continuous(
+      breaks = seq(0, 23, by = 3),
+      minor_breaks = 0:23,
+      labels = function(x)
+        sprintf("%02d:00", x)
+    )+
+    labs(title = "Electric Bike Rides Per Hour", x = "Time Of Day", y = "Percent")+
+    theme_minimal(base_family = 'Helvetica')
+  
+hourly_cbike <- girafe(ggobj = hourly_cbike, options = girafe_options)
+hourly_ebike <- girafe(ggobj = hourly_ebike, options = girafe_options)
+
+hourly_cbike
+hourly_ebike
+```
+
+**Discussion:** For both bike types, ride concentration across the hour of day generally follows the same pattern as overall ride activity: peak usage occurs in the afternoon for both rider groups, with members also showing elevated activity in the morning. However, when comparing distributions across bike types, member patterns remain relatively consistent, whereas casual rider patterns show greater variability. In particular, classic bike usage among casual riders diverges more noticeably from member patterns. By contrast, electric bike usage among casual riders aligns more closely with member trends.
+
+## Heat Maps
+
+Now let's explore ride metrics in relation to geospatial data. To create heat maps, I first drafted a series of queries in SQL to aggregate ride counts into latitude and longitude coordinates rounded to 3 decimal places, for the following time segments:
+
+-   ⏱️ Per Quarter
+
+-   ⏱️ Per Day Of Week
+
+-   ⏱️ Per Hour Of Day
+
+I then processed the results in R to 1. aggregate my quarterly data into metrics for the overall dataset (12 months) and 2. calculate the following metrics for each coordinate point:
+
+-   🌐 Global Percent: Concentration of rides, relative to total ride count within the rider group.
+
+-   🧗 Scaled Percent: Concentration of rides, relative to the highest percentage value registered by a coordinate point across the entire dataset (i.e. normalized to the group maximum).
+
+Finally, I created heat maps based on scaled percent to highlight each group’s internal patterns of spatial concentration.
+
+As a first step, the following query was used to generate ride concentration heat maps for both overall metrics as well as quarterly metrics.
+
+```         
+WITH total_count as (
+  SELECT
+    member_casual,
+    COUNT(DISTINCT ride_id) as total
+  FROM cyclistic
+  GROUP BY member_casual
+)
+
+SELECT 
+  'start' as point_type,
+  quarter(ended_at) as q,
+  c.member_casual,
+  ROUND(start_lat, 3) as lat, 
+  ROUND(start_lng, 3) lng,
+  ROUND((COUNT(DISTINCT ride_ID)/tc.total)*100, 2) as percent_of_rides_for_rider_type,
+  COUNT(DISTINCT ride_ID) as num_of_rides
+from cyclistic c
+LEFT JOIN total_count tc on tc.member_casual = c.member_casual
+GROUP BY q, c.member_casual, lat, lng, tc.total
+
+UNION ALL
+
+SELECT 
+  'end' as point_type,
+  quarter(ended_at) as q,
+  c.member_casual,
+  ROUND(end_lat, 3) as lat, 
+  ROUND(end_lng, 3) lng,
+  ROUND((COUNT(DISTINCT ride_ID)/tc.total)*100, 2) as percent_of_rides_for_rider_type,
+  COUNT(DISTINCT ride_ID) as num_of_rides
+from cyclistic c
+LEFT JOIN total_count tc on tc.member_casual = c.member_casual
+GROUP BY q, c.member_casual, lat, lng, tc.total
+ORDER BY point_type, q, c.member_casual, percent_of_rides_for_rider_type DESC
+```
+
+### Heat Map (12 Months)
+
+Let's explore ride concentration across our entire dataset. The following heat map represents ride concentration per geospatial coordinate for each rider group and includes global percent, scaled percent and raw counts in the hover text.
+
+```{r}
+overall_heatmap <- overall_heatmap_start_and_end %>%
+  filter(!is.na(percent_of_rides_for_rider_type) & percent_of_rides_for_rider_type > 0) %>%
+  group_by(member_casual, lat, lng) %>%
+  summarise(
+    num_of_rides = sum(num_of_rides, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  #Sums all rides across the year
+  group_by(member_casual) %>% 
+  mutate(
+    total_count_by_rider_type = sum(num_of_rides, na.rm = TRUE),
+    total_percent = num_of_rides / total_count_by_rider_type * 100,
+    scaled_intensity = total_percent/max(total_percent, na.rm = TRUE),
+    #.groups = "drop"
+  ) %>%
+  ungroup()%>%
+  #Sums all rides per each quarter
+  mutate (
+    member_casual = recode(
+      member_casual,
+      "member" = "Members",
+      "casual" = "Casual Riders"),
+    label_text = paste0(
+        titles(paste0("Total Rides By Rider Type")),
+        groups(member_casual),
+        coordinates(lng, lat),
+        rides(num_of_rides),
+        global_percentages(total_percent),
+        scaled_percentages(scaled_intensity)
+      ),
+    label = lapply(label_text, htmltools::HTML)
+  )
+
+member_table <- overall_heatmap %>% filter(member_casual == "Members")
+casual_table <- overall_heatmap %>% filter(member_casual == "Casual Riders")
+
+#Template for plots
+member_plot <- leaflet()%>%
+  addTiles() %>%
+    addHeatmap(
+      data = member_table,
+      lng = ~lng,
+      lat = ~lat,
+      intensity = ~scaled_intensity * heatmap_multiplier,
+      blur = 5,
+      radius = 20,
+      max = max(member_table$scaled_intensity)
+    ) %>%
+    addCircleMarkers(
+      data = member_table,
+      lng = ~lng,
+      lat = ~lat,
+      radius = 3,
+      color = "transparent",
+      fillOpacity = 0.1,
+      label = ~label
+    )%>% 
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Members - Overall Heatmap:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+casual_plot <- leaflet()%>%
+  addTiles() %>%
+  addHeatmap(
+    data = casual_table,
+    lng = ~lng,
+    lat = ~lat,
+    intensity = ~scaled_intensity * heatmap_multiplier,
+    blur = 5,
+    radius = 20,
+    max = max(casual_table$scaled_intensity)
+  ) %>%
+  addCircleMarkers(
+    data = casual_table,
+    lng = ~lng,
+    lat = ~lat,
+    radius = 3,
+    color = "transparent",
+    fillOpacity = 0.1,
+    label = ~label
+  )%>% 
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Casual Riders - Overall Heatmap:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+
+member_plot
+casual_plot
+```
+
+**Discussion:** Member rides are more concentrated to specific areas (specifically the Near North and Loop areas of Chicago), while casual rides exhibit lower intensity overall, which suggests that rides are more geographically dispersed.
+
+### Heat Map (Per Quarter)
+
+Now let's explore ride concentration per quarter. The following R code chunk was used to visualize ride concentration per geospatial coordinate. Hover text includes global percent, scaled percent as well as ride totals.
+
+```{r}
+#head(overall_heatmap)
+
+#Data transformation to clean data
+#Meld start/end points
+quarterly_heatmap <- overall_heatmap_start_and_end %>%
+  filter(!is.na(percent_of_rides_for_rider_type) & percent_of_rides_for_rider_type > 0) %>%
+  group_by(member_casual, q, lat, lng) %>%
+  summarise(
+    num_of_rides = sum(num_of_rides, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  #Sums all rides across the year
+  group_by(member_casual) %>% 
+  mutate(
+    total_count_by_rider_type = sum(num_of_rides, na.rm = TRUE),
+  ) %>%
+  ungroup()%>%
+  #Sums all rides per each quarter
+  group_by(member_casual, q) %>%
+  mutate(
+    quarterly_count_by_rider_type = sum(num_of_rides, na.rm = TRUE),
+  ) %>%
+  ungroup()%>%
+  #calculates quarterly percent and total percent
+  mutate(
+    q = as.numeric(q),
+    q_label = recode(
+      q,
+      `1` = "Jan-Mar",
+      `2` = "Apr-June",
+      `3` = "July-Sept",
+      `4` = "Oct-Dec"
+    ),
+    member_casual = recode(
+      member_casual,
+      "member" = "Members",
+      "casual" = "Casual Riders")) %>%
+    ungroup()%>%
+    group_by(member_casual) %>%  
+    mutate(
+      total_percent = num_of_rides / total_count_by_rider_type * 100,
+      quarterly_percent = num_of_rides / quarterly_count_by_rider_type * 100,
+      scaled_intensity = total_percent/max(total_percent, na.rm = TRUE)) %>%
+    ungroup()%>%
+    mutate(
+    label_text = paste0(
+        titles(paste0("Total Rides By Rider Type (Q", q, " - ", q_label, ")" )),
+        groups(member_casual),
+        coordinates(lng, lat),
+        rides(num_of_rides),
+        global_percentages(total_percent),
+        scaled_percentages(scaled_intensity)
+      ),
+    label = lapply(label_text, htmltools::HTML)
+  )
+
+#Template for plots
+quarter_base_leaf <- function(map, riders, quarter, table, groupname){
+  filtered <- table %>% filter(member_casual == riders, q == quarter)
+  map %>%
+    addHeatmap(
+      data = filtered,
+      lng = ~lng,
+      lat = ~lat,
+      intensity = ~scaled_intensity * heatmap_multiplier,
+      blur = 5,
+      radius = 20,
+      max = max(quarterly_heatmap$scaled_intensity),
+      group = groupname 
+    ) %>%
+    addCircleMarkers(
+      data = filtered,
+      lng = ~lng,
+      lat = ~lat,
+      radius = 3,
+      color = "transparent",
+      fillOpacity = 0.1,
+      label = ~label,
+      group = groupname
+    )
+}
+
+#Defining variables to prep the for loop
+for_quarters <- quarterly_heatmap %>% distinct(q) %>% pull()
+base_member_layers <- c()
+base_casual_layers <-c()
+
+#Program maps using FOR loop:
+member_map <- leaflet()%>%
+  addTiles
+  for (quarters in for_quarters) {
+    group_name <- paste0("Q", quarters)
+    base_member_layers <- c(base_member_layers, group_name)
+    member_map <- quarter_base_leaf(
+      map = member_map,
+      riders = "Members",
+      quarter = quarters,
+      table = quarterly_heatmap,
+      groupname = group_name)
+  } 
+casual_map <- leaflet()%>%
+  addTiles
+  for (quarters in for_quarters) {
+  group_name <- paste0("Q", quarters)
+    base_casual_layers <- c(base_casual_layers, group_name)
+    casual_map <- quarter_base_leaf(
+      map = casual_map,
+      riders = "Casual Riders",
+      quarter = quarters,
+      table = quarterly_heatmap,
+      groupname = group_name)
+  } 
+
+member_map <- member_map %>% 
+  addLayersControl(baseGroups = base_member_layers,
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Members - Quarterly Heatmap:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+casual_map <- casual_map %>% 
+  addLayersControl(baseGroups = base_casual_layers,
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Casual Riders - Quarterly Heatmap:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+
+member_map
+casual_map
+```
+
+**Discussion:** Our member group heat maps show higher concentration rates during Q3 and Q4 – similar to our overall heat map, member rides are most concentrated in the Near North and Loop neighborhoods of Chicago. By contrast, our casual rider group heat maps shows rides as being less concentrated across the board. Q3 shows a modest focal point in the Near North area, but outside of that, casual rides remain broadly dispersed across the city.
+
+### Heat Map (Per DOW)
+
+Now let's explore ride concentration per day of week. The following R code chunk visualizes activity per geospatial coordinate, and includes global percent, scaled percent and ride totals in the hover text.
+
+```{r}
+dow_heatmap <- dow_heatmap_start_and_end %>%
+  #1.1.1 Remove N/A and 0s for plotting
+  filter(!is.na(percent_of_rides_for_rider_type) & percent_of_rides_for_rider_type > 0) %>%
+  #1.1.2 Drops point type and recalculates num_of_rides for individual lat and long coordinates
+  group_by(member_casual, day_of_week, day_name, lat, lng) %>% 
+  summarise(
+    num_of_rides = sum(num_of_rides, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  #1.2. Sums all rides across the year for percent calculation
+  group_by(member_casual) %>% 
+  mutate(
+    total_count_by_rider_type = sum(num_of_rides, na.rm = TRUE),
+    total_percent = num_of_rides / total_count_by_rider_type * 100
+  ) %>%
+  ungroup()%>%
+  group_by(member_casual, day_of_week) %>%
+  mutate(
+    total_count_by_day_of_week = sum(num_of_rides, na.rm = TRUE),
+    dow_percent = num_of_rides / total_count_by_day_of_week * 100
+  )%>%
+  ungroup()%>%
+  #1.3. Calculate DOW percent, percent, scaled_percent and create labels
+  mutate (
+    day_of_week = as.numeric(day_of_week),
+    day_name = factor(day_name, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    member_casual = recode(
+      member_casual,
+      "member" = "Members",
+      "casual" = "Casual Riders")) %>%
+  group_by(member_casual)%>%
+  mutate(
+    scaled_intensity = (total_percent/max(total_percent, na.rm = TRUE)) * 100,
+    scaled_intensity_label = scaled_intensity/100) %>%
+  ungroup()%>%
+  mutate(
+    label_text = paste0(
+        titles(paste0("Total Rides By Rider Type (", day_name, ")")),
+        groups(member_casual),
+        coordinates(lng, lat),
+        rides(num_of_rides),
+        global_percentages(total_percent),
+        scaled_percentages(scaled_intensity)
+      ),
+    label = lapply(label_text, htmltools::HTML)
+  )
+
+#2.Create template function to write plots using a loop statement
+dow_base_leaf <- function(map, rider, dow, table, groupname){
+  filtered <- table %>% filter(member_casual == rider , day_name == dow)
+  map %>%
+    addHeatmap(
+      data = filtered,
+      lng = ~lng,
+      lat = ~lat,
+      intensity = ~scaled_intensity*heatmap_multiplier,
+      blur = 5,
+      radius = 20,
+      max = ~max(dow_heatmap$scaled_intensity),
+      group = groupname
+    ) %>%
+    addCircleMarkers(
+      data = filtered,
+      lng = ~lng,
+      lat = ~lat,
+      radius = 3,
+      color = "transparent",
+      fillOpacity = 0.1,
+      label = ~label,
+      group = groupname
+    )
+}
+
+#2.1 Create and clean variables to use as input for the FOR loop:
+
+base_casual_layers <-c()
+base_member_layers <- c()
+for_days_of_week <- dow_heatmap %>% distinct(day_name) %>% pull()
+
+#2.2 Program separate plots using FOR loop:
+#Casual loop
+casual_map <- leaflet()%>%
+  addTiles()
+  for (days in for_days_of_week) {
+    group_name <- paste0(days)
+    base_casual_layers <- c(base_casual_layers, group_name)
+    casual_map <- dow_base_leaf(
+      map = casual_map,
+      rider = "Casual Riders",
+      dow = days,
+      table = dow_heatmap,
+      groupname = group_name)
+  } 
+casual_map <- casual_map %>% 
+  addLayersControl(baseGroups = base_casual_layers,
+                   options = layersControlOptions(collapsed = FALSE),
+                   position = "topright")%>%
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Casual Riders - DOW Heatmap:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+member_map <- leaflet()%>%
+  addTiles()
+for (days in for_days_of_week) {
+  group_name <- paste0(days)
+  base_member_layers <- c(base_member_layers, group_name)
+  member_map <- dow_base_leaf(
+    map = member_map,
+    rider = "Members",
+    dow = days,
+    table = dow_heatmap,
+    groupname = group_name)
+} 
+member_map <- member_map %>% 
+  addLayersControl(baseGroups = base_casual_layers,
+                   options = layersControlOptions(collapsed = FALSE),
+                   position = "topright")%>%
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Members - DOW Heatmap:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+#Initialize plots
+
+casual_map
+member_map
+```
+
+**Discussion:** Member rides are most concentrated on weekdays (Monday to Thursday), with the Loop neighborhood serving as the focal point for the increase in ride activity. Casual rides, meanwhile, display increased ride concentration during the weekends, concentrating around the Near North and Loop neighborhoods.
+
+### Heat Map (Per Hour Segment)
+
+Now let's explore ride concentration per time of day. The following R code chunk visualizes ride activity per 3 hour segment for given geospatial coordinate. Hover text includes global percent, scaled percent and ride totals.
+
+```{r}
+#Data transformation to clean data
+#Meld start/end points
+hour_of_day_heatmap <- hour_of_day_heatmap_start_and_end %>%
+  filter(!is.na(percent_of_rides_for_rider_type) & percent_of_rides_for_rider_type > 0) %>%
+  group_by(member_casual, hour_of_day, lat, lng) %>%
+  summarise(
+    num_of_rides = sum(num_of_rides, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  #Sums all rides across the year
+  group_by(member_casual) %>% 
+  mutate(
+    total_count_by_rider_type = sum(num_of_rides, na.rm = TRUE),
+  ) %>%
+  ungroup()%>%
+  #Sums all rides per each hour
+  group_by(member_casual, hour_of_day) %>%
+  mutate(
+    hour_of_day_count_by_rider_type = sum(num_of_rides, na.rm = TRUE),
+  ) %>%
+  ungroup()%>%
+  #calculates quarterly percent and total percent
+  mutate (
+    hour_segments = case_when(
+      hour_of_day >= 0 & hour_of_day < 3 ~ "00:00 - 03:00",
+      hour_of_day >= 3 & hour_of_day < 6 ~ "03:00 - 06:00",
+      hour_of_day >= 6 & hour_of_day < 9 ~ "06:00 - 09:00",
+      hour_of_day >= 9 & hour_of_day < 12 ~ "09:00 - 12:00",
+      hour_of_day >= 12 & hour_of_day < 15 ~ "12:00 - 15:00",
+      hour_of_day >= 15 & hour_of_day < 18 ~ "15:00 - 18:00",
+      hour_of_day >= 18 & hour_of_day < 21 ~ "18:00 - 21:00",
+      hour_of_day >= 21 ~ "21:00 - 23:59"
+    ),
+    member_casual = recode(
+      member_casual,
+      "member" = "Members",
+      "casual" = "Casual Riders")) %>%
+  group_by(member_casual)%>%
+  mutate(
+    total_percent = num_of_rides / total_count_by_rider_type * 100,
+    hour_of_day_percent = num_of_rides / hour_of_day_count_by_rider_type * 100,
+    scaled_intensity = total_percent/max(total_percent, na.rm = TRUE)) %>%
+  ungroup()%>%
+  mutate(
+    label_text = paste0(
+        titles(paste0("Total Rides By Rider Type (", hour_segments, ")")),
+        groups(member_casual),
+        coordinates(lng, lat),
+        rides(num_of_rides),
+        global_percentages(total_percent),
+        scaled_percentages(scaled_intensity)
+      ),
+    label = lapply(label_text, htmltools::HTML)
+)
+
+#Template for plots
+hour_base_leaf <- function(map, riders, hours, table, groupname){
+  filtered <- table %>% filter(member_casual == riders, hour_segments == hours)
+  map %>%
+    addHeatmap(
+      data = filtered,
+      lng = ~lng,
+      lat = ~lat,
+      intensity = ~scaled_intensity * heatmap_multiplier,
+      blur = 5,
+      radius = 20,
+      max = max(hour_of_day_heatmap$scaled_intensity),
+      group = groupname 
+    ) %>%
+    addCircleMarkers(
+      data = filtered,
+      lng = ~lng,
+      lat = ~lat,
+      radius = 3,
+      color = "transparent",
+      fillOpacity = 0.1,
+      label = ~label,
+      group = groupname
+    )
+}
+
+#Defining variables to prep the for loop
+for_hours <- hour_of_day_heatmap %>% distinct(hour_segments) %>% pull()
+base_member_layers <- c()
+base_casual_layers <-c()
+
+#Program maps using FOR loop:
+member_map <- leaflet()%>%
+  addTiles
+for (hour in for_hours) {
+  group_name <- sprintf(hour)
+  base_member_layers <- c(base_member_layers, group_name)
+  member_map <- hour_base_leaf(
+    map = member_map,
+    riders = "Members",
+    hours = hour,
+    table = hour_of_day_heatmap,
+    groupname = group_name)
+} 
+casual_map <- leaflet()%>%
+  addTiles
+for (hour in for_hours) {
+  group_name <- sprintf(hour)
+  base_casual_layers <- c(base_casual_layers, group_name)
+  casual_map <- hour_base_leaf(
+    map = casual_map,
+    riders = "Casual Riders",
+    hours = hour,
+    table = hour_of_day_heatmap,
+    groupname = group_name)
+} 
+
+member_map <- member_map %>% 
+  addLayersControl(baseGroups = base_member_layers,
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Members - Hour Segments:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+casual_map <- casual_map %>% 
+  addLayersControl(baseGroups = base_casual_layers,
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addControl(html = "<div style = 
+                'font-size: 10px;
+                line-height: 1;'> 
+                <b>Casual Riders - Hour Segments:</b> 
+                <br> *Hover over map to expose values.
+                <br> *Use checkboxes to toggle layers. 
+                <br> <b>Metrics:</b> 
+                <br> *Global Percent: Percent of total rides within rider group. 
+                <br> *Scaled Percent: Percent scaled to the max percent value.
+                <br> *Heatmap plots scaled percent.
+                <br> <b>Legend:</b> 
+                <br><span style='color: blue;'>*Blue</span> plots indicates low activity.
+                <br><span style='color: red;'>*Red</span> indicates high activity.
+                </div style>", 
+             position = "bottomleft")
+
+
+member_map
+casual_map
+```
+
+**Discussion:** Member rides peak in concentration during the morning (6:00 a.m. to 9:00 a.m.), dip during the day (9:00 a.m. to 3:00 p.m.), before peaking once again in the afternoon (3:00 p.m. to 6:00 p.m.), with Near North and Loop areas serve as the center point for those peak hours. Casual rides, meanwhile, show a more gradual peak in ridership beginning in the morning in the Loop area, before expanding to the Near North and Near South Side neighborhoods by midday, then peaking in the afternoon.
+
+## Minute By Minute Plots
+
+Now let's explore ride metrics as broken down per minute elapsed. The following SQL query was used to generate minute-by-minute metrics.
+
+```         
+INSTALL spatial;
+
+LOAD spatial;
+
+with
+  member_count as (
+    SELECT
+      member_casual,
+      count(*) as total_member_count
+    FROM
+      cyclistic
+    GROUP BY
+      member_casual
+  )
+  
+SELECT
+  c.member_casual,
+  EXTRACT(EPOCH FROM (date_trunc('minute', ride_length)))/60 as minute_bucket,
+  COUNT(DISTINCT ride_ID) as num_of_rides,
+  ROUND((COUNT(DISTINCT ride_ID)/mc.total_member_count)*100, 2) as percent_of_rides_for_rider_type,
+  ROUND(AVG(ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))), 2) AS distance_meters_avg,
+  ROUND(MEDIAN(ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))), 2) AS distance_meters_med,
+  ROUND(STDDEV(ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))), 2) AS distance_meters_stddev,
+  SUM(CASE WHEN RIDEABLE_TYPE = 'electric_bike' THEN 1 ELSE NULL END) as num_ebike,
+  ROUND((SUM(CASE WHEN RIDEABLE_TYPE = 'electric_bike' THEN 1 ELSE NULL END)/COUNT(DISTINCT ride_ID))*100, 2) 
+  as percent_ebike_for_minute_bucket,
+  SUM(CASE WHEN RIDEABLE_TYPE = 'classic_bike' THEN 1 ELSE NULL END) as num_cbike,
+  ROUND((SUM(CASE WHEN RIDEABLE_TYPE = 'classic_bike' THEN 1 ELSE NULL END)/COUNT(DISTINCT ride_ID))*100, 2) 
+  as percent_cbike_for_minute_bucket
+FROM cyclistic c
+LEFT JOIN member_count mc ON mc.member_casual = c.member_casual
+GROUP BY c.member_casual, date_trunc('minute', ride_length), mc.total_member_count
+ORDER BY c.member_casual, minute_bucket;
+```
+
+### Ride Concentration (Minute By Minute)
+
+The following R code chunk visualizes ride concentration per minute bucket. Hover text includes per-minute metrics for ride percentages within the rider group, as well as ride totals and comparative ratios.
+
+```{r}
+minute_by_minute_overall_plot <- minute_by_minute_metrics %>%
+  group_by(minute_bucket) %>%
+  mutate(
+    multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(percent_of_rides_for_rider_type/percent_of_rides_for_rider_type[member_casual == "casual"], 2),
+      ifelse(member_casual == "casual" & any(member_casual == "member"), round(percent_of_rides_for_rider_type/percent_of_rides_for_rider_type[member_casual == "member"], 2),
+      NA_real_)
+      )
+  ) %>%
+  ungroup()%>%
+  select(member_casual, minute_bucket, num_of_rides, percent_of_rides_for_rider_type, multiplier_vs_other_group) %>%
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    member_casual = recode(member_casual,"member" = "Members", "casual" = "Casual Riders"),
+    tooltip_label = paste0(
+      titles("Total Rides By Member Type (Minute By Minute)"),
+      groups(member_casual),
+      minute_buckets(minute_bucket),
+      percentages(percent_of_rides_for_rider_type),
+      rides(num_of_rides),
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(aes(y=percent_of_rides_for_rider_type, x=minute_bucket, fill=member_casual))+
+    geom_col_interactive(aes(tooltip = tooltip_label), stat="identity")+
+    facet_wrap(~member_casual, ncol=1)+
+    labs(x="Minutes", y="Percent", title="Distribution Of Rides By Minute", fill="Rider Type")+
+    theme_minimal()
+
+minute_by_minute_overall_plot <- girafe(ggobj = minute_by_minute_overall_plot, options = girafe_options)
+
+minute_by_minute_overall_plot
+```
+
+**Discussion:** Both rider groups show right-skewed distributions, with highest ride concentrations occurring at duration values where minutes fall in the single digits. However, casual riders show a longer tail, suggesting longer rides and more variation than members.
+
+### Average Distance (Minute By Minute)
+
+Now let's explore distance metrics per minute bucket. The following R code chunk visualizes average distances per minute, and includes hover text that shows median values, standard deviation values and comparative ratios.
+
+```{r}
+
+minute_by_minute_distance_plot <- minute_by_minute_metrics %>%
+  group_by(minute_bucket) %>%
+  mutate(
+    multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(distance_meters_avg/distance_meters_avg[member_casual == "casual"], 2),
+             ifelse(member_casual == "casual" & any(member_casual == "member"), round(distance_meters_avg/distance_meters_avg[member_casual == "member"], 2),
+                    NA_real_)
+      )
+  ) %>%
+  ungroup()%>%
+  select(member_casual, minute_bucket, num_of_rides, distance_meters_avg, distance_meters_med, distance_meters_stddev, multiplier_vs_other_group) %>%
+  mutate(
+    other_group = case_when (
+      member_casual == "member" ~ "Casual Riders",
+      member_casual == "casual" ~ "Members"
+    ),
+    member_casual = recode(member_casual,"member" = "Members", "casual" = "Casual Riders"),
+    tooltip_label = paste0(
+      titles("Distance By Rider Type (Minute By Minute)"),
+      groups(member_casual),
+      minute_buckets(minute_bucket),
+      distance_meters_avgs(distance_meters_avg),
+      distance_meters_meds(distance_meters_med),
+      distance_meters_stddevs(distance_meters_stddev),
+      rides(num_of_rides),
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(aes(y=distance_meters_avg, x=minute_bucket, fill=member_casual))+
+  geom_col_interactive(aes(tooltip = tooltip_label), stat="identity")+
+  facet_wrap(~member_casual, ncol=1)+
+  labs(x="Minutes", y="Distance", title="Distribution Of Rides By Minute", fill="Rider Type")+
+  theme_minimal()
+
+minute_by_minute_distance_plot <- girafe(ggobj = minute_by_minute_distance_plot, options = girafe_options)
+
+minute_by_minute_distance_plot
+```
+
+**Discussion:** For casual riders, average distance increases steadily before leveling off around the 20-minute mark at just under 2,000 meters. Member rides follow a similar pattern, with distances rising over time and flattening near the 20-minute range; however, the rate of increase is steeper for members. At shorter durations, distances for both groups are relatively similar, but at longer durations, members register greater average distances.
+
+### Bike Distribution (Minute By Minute)
+
+The following R code chunk visualizes rides per bike type for both rider groups, segmented by minute and includes hover text that shows percentage of rides within the group, total counts and comparative ratios.
+
+```{r}
+minute_by_minute_ride_type <- minute_by_minute_metrics %>%
+  group_by(member_casual) %>%
+  mutate(
+    sum_ebike = sum(num_ebike, na.rm = TRUE),
+    percent_ebike = round((num_ebike/sum_ebike)*100, 2),
+    sum_cbike = sum(num_cbike, na.rm = TRUE),
+    percent_cbike = round((num_cbike/sum_cbike)*100, 2)
+  )%>%
+  ungroup()%>%
+  group_by(minute_bucket) %>%
+  mutate(
+    ebike_multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(percent_ebike/percent_ebike[member_casual == "casual"], 2),
+             ifelse(member_casual == "casual" & any(member_casual == "member"), round(percent_ebike/percent_ebike[member_casual == "member"], 2),
+                    NA_real_)),
+    cbike_multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(percent_cbike/percent_cbike[member_casual == "casual"], 2),
+             ifelse(member_casual == "casual" & any(member_casual == "member"), round(percent_cbike/percent_cbike[member_casual == "member"], 2),
+                    NA_real_))
+  )%>%
+  ungroup() %>%
+  select(member_casual, 
+         minute_bucket,
+         num_ebike, 
+         percent_ebike, 
+         ebike_multiplier_vs_other_group, 
+         num_cbike, percent_cbike, 
+         cbike_multiplier_vs_other_group) %>%
+  mutate(
+    other_group = case_when (member_casual == "member" ~ "Casual Riders", member_casual == "casual" ~ "Members"),
+    member_casual = recode(member_casual,"member" = "Members", "casual" = "Casual Riders"),
+    ebike_tooltip_label = paste0(
+      titles("Electric Bike Rides By Rider Type (Minute By Minute)"),
+      groups(member_casual),
+      minute_buckets(minute_bucket),
+      percentages(percent_ebike),
+      rides(num_ebike),
+      ratios(ebike_multiplier_vs_other_group, other_group)
+    ),
+    cbike_tooltip_label = paste0(
+      titles("Classic Bike Rides By Rider Type (Minute By Minute)"),
+      groups(member_casual),
+      minute_buckets(minute_bucket),
+      percentages(percent_cbike),
+      rides(num_cbike),
+      ratios(cbike_multiplier_vs_other_group, other_group)
+    )
+    )
+
+minute_by_minute_ebike_plot <-minute_by_minute_ride_type %>% ggplot(aes(y=percent_ebike, x=minute_bucket, fill=member_casual))+
+  geom_col_interactive(aes(tooltip = ebike_tooltip_label), stat="identity")+
+  geom_point_interactive(aes(tooltip = ebike_tooltip_label), size = 6, alpha = 0)+
+  facet_wrap(~member_casual, ncol=1)+
+  labs(x="Minutes", y="Percent", title="Distribution Of Electric Bikes By Minute", fill="Rider Type")+
+  theme_minimal()
+
+minute_by_minute_cbike_plot <-minute_by_minute_ride_type %>% ggplot(aes(y=percent_cbike, x=minute_bucket, fill=member_casual))+
+  geom_col_interactive(aes(tooltip = cbike_tooltip_label), stat="identity")+
+  geom_point_interactive(aes(tooltip = cbike_tooltip_label), size = 6, alpha = 0)+
+  facet_wrap(~member_casual, ncol=1)+
+  labs(x="Minutes", y="Percent", title="Distribution Of Classic Bikes By Minute", fill="Rider Type")+
+  theme_minimal()
+
+minute_by_minute_ebike_plot <- girafe(ggobj = minute_by_minute_ebike_plot, options=girafe_options)
+minute_by_minute_cbike_plot <- girafe(ggobj = minute_by_minute_cbike_plot, options=girafe_options)
+
+minute_by_minute_ebike_plot
+minute_by_minute_cbike_plot
+```
+
+**Discussion:** Distribution between both bike types remains largely uniform for members; both bike types exhibit a left-skewed distribution with a long tail where the majority of rides concentrate around durations in the single digits. For casual riders, however, electric bikes are more sharply concentrated towards shorter durations, while classic bikes show more distribution throughout all ride times.
+
+## Meter By Meter Plots
+
+Now let's explore metrics per distance elapsed. The following SQL query was used to generate metrics for rides per 100-meter distance bucket.
+
+```         
+INSTALL spatial;
+
+LOAD spatial;
+
+WITH total_count as (
+  SELECT 
+    member_casual,
+    COUNT(DISTINCT ride_id) as total
+  FROM cyclistic
+  GROUP BY member_casual
+)
+
+SELECT
+  CEILING(ST_DISTANCE_SPHERE (ST_POINT (start_lng, start_lat), ST_POINT (end_lng, end_lat))/100)*100 as distance_bucket,
+  c.member_casual,
+  COUNT(DISTINCT c.ride_id) as num_of_rides,
+  ROUND((COUNT(*)/tc.total)*100, 2) as percent_of_rides_for_rider_type,
+  ROUND(EXTRACT(EPOCH FROM (avg(c.ride_length))), 2) as time_seconds_avg,
+  ROUND(EXTRACT(EPOCH FROM (median(c.ride_length))), 2) as time_seconds_med,
+  ROUND(STDDEV(EXTRACT(EPOCH FROM (c.ride_length))), 2) as time_seconds_stddev,
+  SUM(CASE WHEN c.rideable_type = 'electric_bike' THEN 1 ELSE NULL END) as num_ebike,
+  ROUND(SUM(CASE WHEN c.rideable_type = 'electric_bike' THEN 1 ELSE NULL END)/COUNT(DISTINCT ride_id), 2) as percent_ebike_for_distance_bucket,
+  SUM(CASE WHEN c.rideable_type = 'classic_bike' THEN 1 ELSE NULL END) as num_cbike,
+  ROUND(SUM(CASE WHEN c.rideable_type = 'classic_bike' THEN 1 ELSE NULL END)/COUNT(DISTINCT ride_id), 2) as percent_cbike_for_distance_bucket
+FROM cyclistic c 
+INNER JOIN total_count tc
+  ON c.member_casual = tc.member_casual
+GROUP BY c.member_casual, distance_bucket, tc.total
+ORDER BY c.member_casual, distance_bucket;
+```
+
+### Ride Concentration (Meter By Meter)
+
+The following R code chunk visualizes ride concentration per 100 meter bucket, and includes hover text that contains percentages per rider group, as well as ride totals and comparative ratios.
+
+```{r}
+meter_by_meter_overall_plot <- meter_by_meter_metrics %>%
+  group_by(distance_bucket) %>%
+  mutate(
+    multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(percent_of_rides_for_rider_type/percent_of_rides_for_rider_type[member_casual == "casual"], 2),
+      ifelse(member_casual == "casual" & any(member_casual == "member"), round(percent_of_rides_for_rider_type/percent_of_rides_for_rider_type[member_casual == "member"], 2),
+       NA_real_)
+      )
+  ) %>%
+  ungroup()%>%
+  select(member_casual, distance_bucket, num_of_rides, percent_of_rides_for_rider_type, multiplier_vs_other_group) %>%
+  mutate(
+        other_group = case_when (member_casual == "member" ~ "Casual Riders",member_casual == "casual" ~ "Members"),
+        ratio_label = ifelse(
+          is.na(multiplier_vs_other_group),
+          "N/A",
+          paste0("<br>", multiplier_vs_other_group, ":1")
+        ),
+         member_casual = recode(member_casual,"member" = "Members", "casual" = "Casual Riders"),
+         tooltip_label = paste0(
+            titles("Total Rides By Member Type (100 Meters)"),
+             groups(member_casual),
+             distance_buckets(distance_bucket),
+             percentages(percent_of_rides_for_rider_type),
+             rides(num_of_rides),
+             ratios(multiplier_vs_other_group, other_group)
+         )
+  ) %>%
+  ggplot(aes(y=percent_of_rides_for_rider_type, x=distance_bucket, fill=member_casual))+
+    geom_col_interactive(aes(tooltip = tooltip_label), stat="identity")+
+    geom_point_interactive(aes(tooltip = tooltip_label), size = 6, alpha = 0)+
+    facet_wrap(~member_casual, ncol=1)+
+    labs(x="Meters", y="Percent", title="Distribution Of Rides Per 100 Meters", fill="Rider Type")+
+    theme_minimal()
+
+meter_by_meter_overall_plot <- girafe(ggobj = meter_by_meter_overall_plot, options=girafe_options)
+
+meter_by_meter_overall_plot
+```
+
+**Discussion**: Both rider groups display similar left-skewed distributions, with intermittent peaks at specific distance intervals, suggesting that these distances correlate to distances between specific destinations.
+
+### Average Time (Meter By Meter)
+
+The following R code chunk visualizes average times per 100-meter bucket, and includes hover text that contains median values, standard deviation values, and comparative ratios for ride times.
+
+```{r}
+meter_by_meter_time_plot <- meter_by_meter_metrics %>%
+  group_by(distance_bucket) %>%
+  mutate(
+    multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(time_seconds_avg/time_seconds_avg[member_casual == "casual"], 2),
+             ifelse(member_casual == "casual" & any(member_casual == "member"), round(time_seconds_avg/time_seconds_avg[member_casual == "member"], 2),
+                    NA_real_)
+      )
+  ) %>%
+  ungroup()%>%
+  select(member_casual, num_of_rides, distance_bucket, time_seconds_avg, time_seconds_stddev, time_seconds_med, multiplier_vs_other_group) %>%
+  mutate(
+    other_group = case_when (member_casual == "member" ~ "Casual Riders",member_casual == "casual" ~ "Members"),
+    member_casual = recode(member_casual,"member" = "Members", "casual" = "Casual Riders"),
+    ratio_label = ifelse(
+          is.na(multiplier_vs_other_group),
+          "N/A",
+          paste0(multiplier_vs_other_group, ":1")
+        ),
+    tooltip_label = paste0(
+      titles("Time Spent By Rider Type (Meter By Meter)"),
+      groups(member_casual),
+      distance_buckets(distance_bucket),
+      time_minutes_avgs(time_seconds_avg),
+      time_minutes_meds(time_seconds_med),
+      time_minutes_stddevs(time_seconds_stddev),
+      rides(num_of_rides),
+      ratios(multiplier_vs_other_group, other_group)
+    )
+  ) %>%
+  ggplot(aes(y=time_seconds_avg, x=distance_bucket, fill=member_casual))+
+  geom_col_interactive(aes(tooltip = tooltip_label), stat="identity")+
+  geom_point_interactive(aes(tooltip = tooltip_label), size = 6, alpha = 0)+
+  facet_wrap(~member_casual, ncol=1, scales="fixed")+
+  labs(x="Meters", y="Seconds", title="Distribution Of Rides Per 100 Meters", fill="Rider Type")+
+  theme_minimal()
+
+meter_by_meter_time_plot <- girafe(ggobj = meter_by_meter_time_plot, options=girafe_options)
+
+meter_by_meter_time_plot
+```
+
+**Discussion:** For both rider groups, ride times rise as distance increases. However, across nearly all distance buckets, casual riders record longer trip times than members.
+
+### Bike Distribution (Meter By Meter)
+
+The following R code chunk visualizes bike distribution per 100-meter bucket, and includes hover text that contains percentages within each rider group, as well as ride counts and comparative ratios.
+
+```{r}
+meter_by_meter_ride_type <- meter_by_meter_metrics %>%
+  group_by(member_casual) %>%
+  mutate(
+    sum_ebike = sum(num_ebike, na.rm = TRUE),
+    percent_ebike = round((num_ebike/sum_ebike)*100, 2),
+    sum_cbike = sum(num_cbike, na.rm = TRUE),
+    percent_cbike = round((num_cbike/sum_cbike)*100, 2)
+      )%>%
+  ungroup()%>%
+  group_by(distance_bucket) %>%
+  mutate(
+    ebike_multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(percent_ebike/percent_ebike[member_casual == "casual"], 2),
+      ifelse(member_casual == "casual" & any(member_casual == "member"), round(percent_ebike/percent_ebike[member_casual == "member"], 2),
+            NA_real_)),
+    cbike_multiplier_vs_other_group =
+      ifelse(member_casual == "member" & any(member_casual == "casual"), round(percent_cbike/percent_cbike[member_casual == "casual"], 2),
+             ifelse(member_casual == "casual" & any(member_casual == "member"), round(percent_cbike/percent_cbike[member_casual == "member"], 2),
+                    NA_real_)),
+  )%>%
+  ungroup() %>%
+  select(member_casual, 
+         distance_bucket,
+         num_ebike, 
+         percent_ebike, 
+         ebike_multiplier_vs_other_group, 
+         num_cbike, percent_cbike, 
+         cbike_multiplier_vs_other_group) %>%
+  mutate(
+    other_group = case_when (member_casual == "member" ~ "Casual Riders", member_casual == "casual" ~ "Members"),
+    member_casual = recode(member_casual,"member" = "Members", "casual" = "Casual Riders"),
+    ebike_ratio_label = ifelse(
+      is.na(ebike_multiplier_vs_other_group),
+      "N/A",
+      paste0(ebike_multiplier_vs_other_group, ":1")
+    ),
+    cbike_ratio_label = ifelse(
+      is.na(cbike_multiplier_vs_other_group),
+      "N/A",
+      paste0(cbike_multiplier_vs_other_group, ":1")
+    ),
+    ebike_tooltip_label = paste0(
+      titles("Electric Bike Rides By Rider Type (Meter By Meter)"),
+      groups(member_casual),
+      distance_buckets(distance_bucket),
+      percentages(percent_ebike),
+      rides(num_ebike),
+      ratios(ebike_multiplier_vs_other_group, other_group)
+    ),
+    cbike_tooltip_label = paste0(
+      titles("Classic Bike Rides By Rider Type (Meter By Meter)"),
+      groups(member_casual),
+      distance_buckets(distance_bucket),
+      percentages(percent_cbike),
+      rides(num_cbike),
+      ratios(cbike_multiplier_vs_other_group, other_group)
+    ),
+  )
+
+meter_by_meter_ebike_plot <-meter_by_meter_ride_type %>% ggplot(aes(y=percent_ebike, x=distance_bucket, fill=member_casual))+
+  geom_col_interactive(aes(tooltip = ebike_tooltip_label), stat="identity")+
+  geom_point_interactive(aes(tooltip = ebike_tooltip_label), size = 6, alpha = 0)+
+  facet_wrap(~member_casual, ncol=1)+
+  labs(x="Meters", y="Percent", title="Distribution Of Electric Bikes Per 100 Meters", fill="Rider Type")+
+  theme_minimal()
+
+meter_by_meter_cbike_plot <-meter_by_meter_ride_type %>% ggplot(aes(y=percent_cbike, x=distance_bucket, fill=member_casual))+
+  geom_col_interactive(aes(tooltip = cbike_tooltip_label), stat="identity")+
+  geom_point_interactive(aes(tooltip = cbike_tooltip_label), size = 6, alpha = 0)+
+  facet_wrap(~member_casual, ncol=1)+
+  labs(x="Meters", y="Percent", title="Distribution Of Classic Bikes Per 100 Meters", fill="Rider Type")+
+  theme_minimal()
+
+meter_by_meter_ebike_plot <- girafe(ggobj = meter_by_meter_ebike_plot, options=girafe_options)
+meter_by_meter_cbike_plot <- girafe(ggobj = meter_by_meter_cbike_plot, options=girafe_options)
+
+meter_by_meter_ebike_plot
+meter_by_meter_cbike_plot
+```
+
+**Discussion:** Overall, both rider groups show left-skewed distributions across both bike types. Classic bike trips, however, do not exhibit the pronounced peaks seen in the overall ride-time distribution. Electric bikes, by contrast, do show clear peaks. Around these peak intervals, casual riders register slightly sharper concentration spikes than members, while member trips are a bit more evenly distributed across the short-to-medium range.
+
+For shorter distance electric bike trips, both groups register similar concentration rates. Longer distance electric bike rides, however, show higher relative activity for members. Shorter distance classic bike rides, meanwhile, also show higher concentration rates for members, relative to casual riders. Longer distance classic bike rides show higher relative activity for casual riders.
+
+# Presenting The Findings
+
+Our data illustrates several ways that riders and annual members use bikes differently. Below is a summary of key findings regarding rider behavior and suggested actions for converting casual riders to members based on our findings. 
+
+## Key Findings
+
+### Crossover Findings
+
+-   Both groups travel roughly the same distances.
+
+-   Both groups exhibit similar seasonal trends throughout the year, with peak ridership occurring during Q3 (July - September) and the lowest activity occurring during Q1 (January - March).
+
+-   Both groups exhibit peak ridership in the afternoons.
+
+-   Both groups ride electric bikes more than classic bikes. 
+
+-   For electric bike rides, both groups show similar concentration rates for shorter rides. Electric bike distribution for both groups is also characterized by a series of sharp peaks at specific distance intervals, as shown in the plot for Bike Distribution (Meter By Meter).
+
+### Member Findings
+
+-   Member rides are shorter in duration.
+
+-   Member rides are more consistent in duration.
+
+-   Member activity is less affected by seasonal changes compared to casual rider activity and during Q4 specifically, members are more active relative to casual riders. Classic bike usage in particular increases in Q4, relative to electric bikes. 
+
+-   Member activity is more concentrated on weekdays (Monday through Thursday) and less concentrated on weekends (Friday through Sunday).
+
+-   Member activity shows increased ridership during morning hours, then decreased ridership in the middle of the day before peaking in the afternoon. 
+
+-   Member rides are more concentrated in the Loop and Near North neighborhoods. Activity in these neighborhoods is highest during Q3 and Q4. Weekdays also exhibit increased concentration, although member ridership is more geographically dispersed across the week relative to casual riders.
+
+-   Members use classic bikes more frequently for shorter-duration rides and electric bikes for longer duration rides.
+
+### Casual Rider Findings
+
+-   Casual rides are longer in duration.
+
+-   Casual rides exhibit more variability in duration. 
+
+-   Casual ridership is more strongly affected by seasonal changes than member ridership. In particular, electric bikes vary more in quarter-to-quarter rides than classic bikes, which show more stable ridership. 
+
+-   Casual ridership is higher on weekends (Friday through Sunday), and lower on weekdays (Monday through Thursday). Classic bikes, in particular, show greater day-of-week variability, while electric bikes maintain steadier rates throughout the week.
+
+-   Throughout the day, casual ridership builds steadily, from morning to midday, before peaking in the afternoon. Electric bikes, however, do show a slight increase in activity in the morning.
+
+-   Casual riders use electric bikes more for shorter duration rides, and classic bikes for longer duration trips.
+
+-   Casual rides are more dispersed geographically than member rides. However, casual rides do show increased concentration rate in the Loop and Near North neighborhoods during daytime hours, as well as on weekends. 
+
+## Action Items
+
+The capstone project prompt asks students to identify opportunities for converting casual riders to annual members. Here are action items that the fictional company Cyclistic can take to grow membership by targeting casual users. 
+
+### **Leverage Casual Rider Behavior**
+
+First, strategic efforts to convert casual riders to members should account for behavioral trends that are distinct to casual riders. Focusing on these patterns will enable us to reach a broader audience and deliver messaging that is relevant to how casual riders actually use the service. Specific areas of focus relevant to this approach are listed below:
+
+-   **Leverage casual riders' preference for longer duration rides.** Example: Framing membership as an opportunity for more low-pressure, exploratory rides.
+
+-   **Leverage casual riders' seasonal variability.** Example: Running a promotion during the summer for membership signups.
+
+-   **Leverage casual riders' higher daytime activity patterns.** Example: Running a promotion for membership signups specific to midday/early afternoon.
+
+-   **Leverage casual riders' higher ride concentration rates during weekends.** Example: Offering weekend-specific perks for new member signups.
+
+-   **Leverage casual riders' preference for classic bikes during longer duration rides.** Example: Highlighting access to classic bikes through membership signups.
+
+### **Leverage Member Behavior**
+
+Focusing on casual rider behavior alone, however, provides an incomplete picture of membership realities. Strategic effort need to also take into account behavioral trends that are distinct to members as well. Specific areas of focus are listed below:
+
+-   **Leverage members' preference for shorter duration rides.** Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).
+
+-   **Leverage members' seasonal consistency.** Example: Highlighting membership as ideal for riders who bike throughout the year.
+
+-   **Leverage members' increased activity during weekdays.** Example: Running a promotion centered on weekday rides.
+
+-   **Leverage members' increased activity during morning and afternoons.** Example: Highlighting membership as a convenient option for morning and afternoon commutes.
+
+### **Leverage Crossover** **Behavior**
+
+In addition to accounting for distinct member and casual rider behaviors, we can further strengthen our strategic approach by targeting affinity behaviors (i.e. patterns where both rider groups show similarity).
+
+-   **Leverage both rider groups' increased activity during the summer.** Example: Running a membership signup initiative during Q3.  
+
+-   **Leverage both rider groups' increased activity during afternoons.** Example: Positioning membership as a practical option for afternoon commutes.
+
+-   **Leverage casual riders' morning electric bike usage, which closely resembles member patterns.** Example: Offering a membership trial for morning electric bike rides.
+
+-   **Leverage casual riders' Q4 classic bike usage, which also resembles member patterns.** Example: Running a holiday campaign centered around classic bikes.
+
+## Improvements
+
+This case study concludes with a discussion on the limitations of our data, as well as opportunities to improve upon our existing methodologies. 
+
+### Data Limitations
+
+-   **Lack of user-level data:** Divvy bike share data does not include information on repeat rides specific to individual users (members or casual riders), nor does it include information with regards to dollar-cost of casual rides. This limits our visibility into rider behavior. 
+
+<!-- -->
+
+-   **GPS inaccuracies:** Some geospatial coordinates may reflect broad approximations or default values that can arise from GPS errors – depending on scale, these inaccuracies may affect the precision of distance calculations. Future analysis of ride distances could bolster accuracy through more rigorous cleaning or through targeted random sampling.  
+
+-   **Station Names/IDs:** While station names and IDs were cleaned to resolve duplicate values, station-level analysis was not conducted for this case study. The data cleaning processes established here nonetheless have been documented and can be used/expanded upon for future analysis attempts.
+
+### Method Limitations
+
+-   **SQL/R Workflow:** Using SQL and R together created a workflow bottleneck that required re-running the SQL queries, then re-importing the results into R, in order to calculate metrics if they weren't initially included in the original results from SQL. Future workflows may benefit from consolidating analysis and visualization to a specific environment (for instance, using R to calculate metrics and generate visualizations).
+
+-   **R:** Several R code chunks define critical elements within each pipe, making global adjustments difficult. Towards the end of the project, some modularity was introduced through functions for tooltip formatting. Future workflows would benefit from utilizing a more modular approach to coding data visualizations from the outset.
