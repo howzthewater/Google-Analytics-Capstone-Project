@@ -15,43 +15,28 @@ For my project, I chose "Case Study 1: How does a bike share navigate speedy suc
 
 Using the above prompt, we can derive two key objectives we need to accomplish with the subsequent investigation:
 
-1.  Identify how riders and annual members use bikes differently.
+-   Identify how riders and annual members use bikes differently.
 
-2.  Use these insights to identify opportunities for converting casual riders to annual members.
+-   Use these insights to identify opportunities for converting casual riders to annual members.
 
 ## Project Steps
 
-To answer these questions, the following workflow was adopted to preparing and processing Divvy's bikeshare data.
+To answer these questions, the following workflow was adopted to preparing and processing Divvy's rideshare data.
 
--   Download monthly data from Divvy via [divvy-tripdata](https://divvy-tripdata.s3.amazonaws.com/index.html).
-
--   Upload monthly data onto [MotherDuck](https://app.motherduck.com/), a cloud data warehouse, then use SQL to clean, process and analyze the data set.
+-   Transfer monthly data from Divvy via [divvy-tripdata](https://divvy-tripdata.s3.amazonaws.com/index.html) onto [MotherDuck](https://app.motherduck.com/), a cloud data warehouse, then use SQL to clean, process and analyze the data set.
 
 -   Import aggregate data into R Studio, then use R to further transform data for visualization and findings.
 
-For analysis, ride trends were measured by calculating several key metrics: ride count, average distance per ride, average ride duration, and bike-type distribution. These metrics were evaluated across multiple time frames:
+For analysis, ride trends were measured by calculating several key metrics: ride count, average distance per ride, average ride duration, and bike-type distribution. These metrics were evaluated across the following time frames:
 
--   Overall (12 months).
-
--   Per quarter.
-
--   Per day of week.
-
--   Per hour of day.
-
--   Distance bucket: Per 100 meter segment.
-
--   Time bucket: Per minute elapsed.
-
-Additionally, geospatial heat maps were created to explore ride count within the context of these time frames:
-
--   Overall (12 months).
-
--   By quarter.
-
--   By day of week.
-
--   By hour of day.
+| Time Frame | Description | Analyses Included |
+|:-----------------:|:----------------------------:|:---------------------:|
+| 12 Months | Metrics derived from the entire dataset. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map. |
+| Per Quarter | Metrics segmented by quarter. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map. |
+| Day Of Week | Metrics segmented by day of week. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map. |
+| Hour Of Day | Metrics segmented by hour of day. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map (per 3 hour segment). |
+| Per Minute | Metrics segmented by time (1-minute intervals). | Ride Concentration, Average Distance, Bike Distribution. |
+| Per 100 Meters | Metrics segmented by distance (100-meter intervals). | Ride Concentration, Average Time, Bike Distribution. |
 
 With this framework in mind, the first step was to compile the raw dataset.
 
@@ -149,79 +134,35 @@ CREATE OR REPLACE TABLE divvytripdata AS (
 
 ## Exploring The Raw Data
 
-I then proceeded to explore my raw dataset using SQL. As a first step, I queried for null values, outlier values, and tested for duplicate values relating to station IDs in particular.
+I then proceeded to explore my raw dataset using SQL. As a first step, I queried for null values, outlier values, and tested for duplicate values relating to station IDs in particular. Here are metrics from the raw data set:
 
-Here are metrics from the raw data set:
-
-**Ride ID:** Data on Ride IDs appears to be complete.
-
--   Results in data set: 8,511,437
-
--   Unique Ride IDs: 8,511,437
-
--   Null Ride IDs: 0
-
-**Vehicle Type:** Data appears to be complete. No major cleaning required.
-
--   Unique values for vehicle types: 2 (Electric Bikes, Classic Bikes)
-
--   Null values for vehicle types: 0
-
-**Rider Type:** Data appears to be complete. No major cleaning required.
-
--   Unique values for member_casual column: 2 (Member group, Casual Rider group)
-
--   Null values for member_casual: 0
-
-**Station Names/Station IDs:** Duplicate station names + duplicate station IDs will need to be transformed in order to ensure that station IDs correlate to specific station names. However, null values will not be filtered out of the data set, as null values comprise a significant portion of station name/ID values and removal may introduce bias in results.
-
--   Number of unique starting stations logged by name: 1,969
-
--   Number of unique starting stations logged by station ID: 3,498
-
--   Number of ending stations logged by name: 1,973
-
--   Number of ending stations logged by station ID: 3,517
-
--   Number of null values for starting stations (same values for both name and ID): 1,740,714
-
--   Number of null values for ending stations (same value for both name and ID): 1,740,714
-
-**Geo-location Coordinates:** Unlike station names/IDs, there are only a handful of end coordinates with null values – null values can be safely filtered out. End longitude coordinates exhibit outliers well outside of range of the Chicago Metropolitan area, suggesting faulty data that will need to be filtered. Lastly, decimal precision ranges from broad to precise – coordinate decimals can benefit from normalization as well.
-
--   Number of null starting coordinates: 0
-
--   Number of null ending coordinates: 8,899
-
--   Starting latitude:
-
-    -   Range: 41.64 to 42.07
-
-    -   Decimal precision: 1 to 15
-
--   Starting longitude
-
-    -   Range: -87.91 to -87.52
-
-    -   Decimal precision: 1 to 14
-
--   Ending latitude
-
-    -   Range: 16.06 to 87.96
-
-    -   Decimal precision: 1 to 15
-
--   Range for ending longitude:
-
-    -   Range: -144.05 to 87.96
-
-    -   Decimal precision: 1 to 14
-
-**⏱️ Ride Times:** Minimum ride time show as a negative value, suggesting faulty data that will need to be cleaned at this stage. Maximum Ride Time elapses for more than a day, suggesting outliers that could skew overall metrics.
-
--   Minimum Ride Time: -56:01:302
-
--   Maximum Ride Time: 02:14:54:011
+| Field | Metric | Value | Finding |
+|:----------------:|:----------------:|:----------------:|:----------------:|
+| Ride ID | Results in data set | 8,511,437 | No cleaning required. |
+| Ride ID | Unique Ride IDs | 8,511,437 | No cleaning required. |
+| Ride ID | Null Ride IDs | 0 | No cleaning required. |
+| Vehicle | Distinct Values | 2 - Electric Bikes, Classic Bikes | No cleaning required. |
+| Vehicle | Null Values | 0 | No cleaning required. |
+| Rider Group | Distinct Values | 2 - Members, Casual Riders | No cleaning required. |
+| Rider Group | Null Values | 0 | No cleaning required. |
+| Station | Distinct Starting Station Names | 1,969 | Duplicate station names + duplicate station IDs will need to be cleaned in order to ensure that station IDs correlate to specific station names. |
+| Station | Distinct Starting Station IDs | 3,498 | Duplicate station names + duplicate station IDs will need to be cleaned in order to ensure that station IDs correlate to specific station names. |
+| Station | Distinct Ending Station Names | 1,973 | Duplicate station names + duplicate station IDs will need to be cleaned in order to ensure that station IDs correlate to specific station names. |
+| Station | Distinct Ending Station IDs | 3,517 | Duplicate station names + duplicate station IDs will need to be cleaned in order to ensure that station IDs correlate to specific station names. |
+| Station | Null Values | 1,740,714 | No cleaning required. Null values comprise a significant portion of station name/ID values and removal may introduce bias in results. |
+| Station | Null Values | 1,740,714 | No cleaning required. Null values comprise a significant portion of station name/ID values and removal may introduce bias in results. |
+| Geospatial Coordinates | Null Starting Coordinates | 0 | No cleaning required |
+| Geospatial Coordinates | Null Ending Coordinates | 8,899 | Nulls can be filtered out. |
+| Geospatial Coordinates | Starting Latitude Range | 41.64 to 42.07 | No cleaning required. |
+| Geospatial Coordinates | Starting Latitude Precision (Decimal Places) | 1 to 15 decimal places | Cleaning required. Coordinate decimals can benefit from normalization. |
+| Geospatial Coordinates | Starting Longitude Range | -87.91 to -87.52 | No cleaning required. |
+| Geospatial Coordinates | Starting Longitude Precision (Decimal Places) | 1 to 14 | Cleaning required. Coordinate decimals can benefit from normalization. |
+| Geospatial Coordinates | Ending Latitude Range | 16.06 to 87.96 | Cleaning required. End longitude coordinates exhibit outliers well outside of range of the Chicago Metropolitan area, suggesting faulty data that will need to be filtered. |
+| Geospatial Coordinates | Ending Latitude Precision | 1 to 15 | Cleaning required. Coordinate decimals can benefit from normalization. |
+| Geospatial Coordinates | Ending Longitude Range | -144.05 to 87.96 | Cleaning required. End longitude coordinates exhibit outliers well outside of range of the Chicago Metropolitan area, suggesting faulty data that will need to be filtered. |
+| Geospatial Coordinates | Ending Longitude Precision | 1 to 14 | Cleaning required. Coordinate decimals can benefit from normalization. |
+| Ride Time | Minimum Ride Times | -56:01:302 | Cleaning required. Minimum ride time show as a negative value, suggesting faulty data. |
+| Ride Time | Maximum Ride Times | 02:14:54:011 | Cleaning required. Maximum Ride Time elapses for more than a day, suggesting outliers that could skew overall metrics. |
 
 ## Inconsistent Station Names/IDs
 
@@ -361,7 +302,7 @@ For station IDs, duplicates were resolved in SQL by creating a new variable, `cl
 
 ### Final Statement
 
-Below is the query I wrote to create the cleaned dataset:
+Below is the query used to create the cleaned dataset:
 
 ``` sql
 --This first CTE determines Q1 and Q3 values for geolocation and ride length data within raw dataset. 
@@ -573,77 +514,35 @@ ORDER BY
 
 ### Assessing The Cleaned Data
 
-Once I had created the dataset, I used my previous queries to explore the cleaned data.
+Below are metrics for the cleaned dataset:
 
-**Ride ID:**
-
--   Results in cleaned data set: 5,001,023
-
--   Unique Ride IDs: 5,001,023
-
--   Null Ride IDs: 0
-
-**Vehicle Type:**
-
--   Unique values for vehicle types: 2 (electric bikes, classic bikes)
-
--   Null values for vehicle types: 0
-
-**Rider Type:**
-
--   Unique values for member_casual column: 2 (members, casual riders)
-
--   Null values for member_casual: 0
-
-**Station Names/Station IDs:**
-
--   Number of unique starting stations logged by name: 669
-
--   Number of unique starting stations logged by station ID: 669
-
--   Number of ending stations logged by name: 675
-
--   Number of ending stations logged by station ID: 675
-
--   Number of null values for starting stations (same values for both name and ID): 978,512
-
--   Number of null values for ending stations (same value for both name and ID): 978,512
-
-**Geo-location Coordinates:**
-
--   Number of null starting coordinates: 0
-
--   Number of null ending coordinates: 0
-
--   Starting latitude:
-
-    -   Range: 41.80839 to 42.001824
-
-    -   Decimal precision: 1 to 6
-
--   Starting longitude
-
-    -   Range: -87.709189 to -87.58
-
-    -   Decimal precision: 1 to 6
-
--   Ending latitude
-
-    -   Range: 41.808038 to 42.001785
-
-    -   Decimal precision: 1 to 6
-
--   Range for ending longitude:
-
-    -   Range: -87.708887 to -87.58
-
-    -   Decimal precision: 1 to 6
-
-    **Ride Times:**
-
--   Minimum Ride Time: 00:01:00.03
-
--   Maximum Ride Time: 00:44:48.921
+| Field | Metric | Raw Values | Cleaned Values |
+|:----------------:|:----------------:|:----------------:|:----------------:|
+| Ride ID | Results in data set | 8,511,437 | 5,001,023 |
+| Ride ID | Unique Ride IDs | 8,511,437 | 5,001,023 |
+| Ride ID | Null Ride IDs | 0 | 0 |
+| Vehicle | Distinct Values | 2 - Electric Bikes, Classic Bikes | 2 - Electric Bikes, Classic Bikes |
+| Vehicle | Null Values | 0 | 0 |
+| Rider Group | Distinct Values | 2 - Members, Casual Riders | 2 - Members, Casual Riders |
+| Rider Group | Null Values | 0 | 0 |
+| Station | Distinct Starting Station Names | 1,969 | 669 |
+| Station | Distinct Starting Station IDs | 3,498 | 669 |
+| Station | Distinct Ending Station Names | 1,973 | 675 |
+| Station | Distinct Ending Station IDs | 3,517 | 675 |
+| Station | Null Values | 1,740,714 | 978,512 |
+| Station | Null Values | 1,740,714 | 978,512 |
+| Geospatial Coordinates | Null Starting Coordinates | 0 | 0 |
+| Geospatial Coordinates | Null Ending Coordinates | 8,899 | 0 |
+| Geospatial Coordinates | Starting Latitude Range | 41.64 to 42.07 | 41.80839 to 42.001824 |
+| Geospatial Coordinates | Starting Latitude Precision (Decimal Places) | 1 to 15 decimal places | 1 to 6 |
+| Geospatial Coordinates | Starting Longitude Range | -87.91 to -87.52 | -87.709189 to -87.58 |
+| Geospatial Coordinates | Starting Longitude Precision (Decimal Places) | 1 to 14 | 1 to 6 |
+| Geospatial Coordinates | Ending Latitude Range | 16.06 to 87.96 | 41.808038 to 42.001785 |
+| Geospatial Coordinates | Ending Latitude Precision | 1 to 15 | 1 to 6 |
+| Geospatial Coordinates | Ending Longitude Range | -144.05 to 87.96 | -87.708887 to -87.58 |
+| Geospatial Coordinates | Ending Longitude Precision | 1 to 14 | 1 to 6 |
+| Ride Time | Minimum Ride Times | -56:01:302 | 00:01:00.03 |
+| Ride Time | Maximum Ride Times | 02:14:54:011 | 00:44:48.921 |
 
 # Presenting The Data
 
@@ -651,7 +550,7 @@ Once I had created the dataset, I used my previous queries to explore the cleane
 
 After creating the cleaned dataset, I took a two-stage approach towards analyzing the data.
 
-**Perform Calculations Using SQL:** First, I queried the data using SQL to generate tables with metrics pertaining to the following areas of focus:
+**Perform Calculations Using SQL:** First, I queried the data using SQL to generate tables with metrics pertaining to the following areas of focus
 
 -   Overall data (12 months).
 
@@ -2798,7 +2697,7 @@ casual_map
 
 **Discussion:** Member rides peak in concentration during the morning (6:00 a.m. to 9:00 a.m.), dip during the day (9:00 a.m. to 3:00 p.m.), before peaking once again in the afternoon (3:00 p.m. to 6:00 p.m.), with Near North and Loop areas serve as the center point for those peak hours. Casual rides, meanwhile, show a more gradual peak in ridership beginning in the morning in the Loop area, before expanding to the Near North and Near South Side neighborhoods by midday, then peaking in the afternoon.
 
-## Minute By Minute Plots
+## Per Minute Metrics
 
 Now let's explore ride metrics as broken down per minute elapsed. The following SQL query was used to generate minute-by-minute metrics.
 
@@ -2838,7 +2737,15 @@ GROUP BY c.member_casual, date_trunc('minute', ride_length), mc.total_member_cou
 ORDER BY c.member_casual, minute_bucket;
 ```
 
-### Ride Concentration (Minute By Minute)
+The results from the above query were then used to visualize the following:
+
+-   Ride Concentration (Per Minute)
+
+-   Average Distance (Per Minute)
+
+-   Bike Distribution (Per Minute)
+
+### Ride Concentration (Per Minute)
 
 The following R code chunk visualizes ride concentration per minute bucket. Hover text includes per-minute metrics for ride percentages within the rider group, as well as ride totals and comparative ratios.
 
@@ -2882,7 +2789,7 @@ minute_by_minute_overall_plot
 
 **Discussion:** Both rider groups show right-skewed distributions, with highest ride concentrations occurring at duration values where minutes fall in the single digits. However, casual riders show a longer tail, suggesting longer rides and more variation than members.
 
-### Average Distance (Minute By Minute)
+### Average Distance (Per Minute)
 
 Now let's explore distance metrics per minute bucket. The following R code chunk visualizes average distances per minute, and includes hover text that shows median values, standard deviation values and comparative ratios.
 
@@ -2929,7 +2836,7 @@ minute_by_minute_distance_plot
 
 **Discussion:** For casual riders, average distance increases steadily before leveling off around the 20-minute mark at just under 2,000 meters. Member rides follow a similar pattern, with distances rising over time and flattening near the 20-minute range; however, the rate of increase is steeper for members. At shorter durations, distances for both groups are relatively similar, but at longer durations, members register greater average distances.
 
-### Bike Distribution (Minute By Minute)
+### Bike Distribution (Per Minute)
 
 The following R code chunk visualizes rides per bike type for both rider groups, segmented by minute and includes hover text that shows percentage of rides within the group, total counts and comparative ratios.
 
@@ -3006,7 +2913,7 @@ minute_by_minute_cbike_plot
 
 **Discussion:** Distribution between both bike types remains largely uniform for members; both bike types exhibit a left-skewed distribution with a long tail where the majority of rides concentrate around durations in the single digits. For casual riders, however, electric bikes are more sharply concentrated towards shorter durations, while classic bikes show more distribution throughout all ride times.
 
-## Meter By Meter Plots
+## Per 100-Meters Metrics
 
 Now let's explore metrics per distance elapsed. The following SQL query was used to generate metrics for rides per 100-meter distance bucket.
 
@@ -3042,7 +2949,15 @@ GROUP BY c.member_casual, distance_bucket, tc.total
 ORDER BY c.member_casual, distance_bucket;
 ```
 
-### Ride Concentration (Meter By Meter)
+The results from the query above were then used to generate visualizations for the following:
+
+-   Ride Concentration (Per 100 Meters)
+
+-   Average Time (Per 100 Meters)
+
+-   Bike Distribution (Per 100 Meters)
+
+### Ride Concentration (Per 100 Meters)
 
 The following R code chunk visualizes ride concentration per 100 meter bucket, and includes hover text that contains percentages per rider group, as well as ride totals and comparative ratios.
 
@@ -3089,7 +3004,7 @@ meter_by_meter_overall_plot
 
 **Discussion**: Both rider groups display similar left-skewed distributions, with intermittent peaks at specific distance intervals, suggesting that these distances correlate to distances between specific destinations.
 
-### Average Time (Meter By Meter)
+### Average Time (Per 100 Meters)
 
 The following R code chunk visualizes average times per 100-meter bucket, and includes hover text that contains median values, standard deviation values, and comparative ratios for ride times.
 
@@ -3138,7 +3053,7 @@ meter_by_meter_time_plot
 
 **Discussion:** For both rider groups, ride times rise as distance increases. However, across nearly all distance buckets, casual riders record longer trip times than members.
 
-### Bike Distribution (Meter By Meter)
+### Bike Distribution (Per 100 Meters)
 
 The following R code chunk visualizes bike distribution per 100-meter bucket, and includes hover text that contains percentages within each rider group, as well as ride counts and comparative ratios.
 
@@ -3233,17 +3148,21 @@ Our data illustrates several ways that riders and annual members use bikes diffe
 
 ## Key Findings
 
-### Crossover Findings
+### Casual Rider Findings
 
--   Both groups travel roughly the same distances.
+-   Casual rides are longer in duration.
 
--   Both groups exhibit similar seasonal trends throughout the year, with peak ridership occurring during Q3 (July - September) and the lowest activity occurring during Q1 (January - March).
+-   Casual rides exhibit more variability in duration. 
 
--   Both groups exhibit peak ridership in the afternoons.
+-   Casual ridership is more strongly affected by seasonal changes than member ridership. In particular, electric bikes vary more in quarter-to-quarter rides than classic bikes, which show more stable ridership. 
 
--   Both groups ride electric bikes more than classic bikes. 
+-   Casual ridership is higher on weekends (Friday through Sunday), and lower on weekdays (Monday through Thursday). Classic bikes, in particular, show greater day-of-week variability, while electric bikes maintain steadier rates throughout the week.
 
--   For electric bike rides, both groups show similar concentration rates for shorter rides. Electric bike distribution for both groups is also characterized by a series of sharp peaks at specific distance intervals, as shown in the plot for Bike Distribution (Meter By Meter).
+-   Throughout the day, casual ridership builds steadily, from morning to midday, before peaking in the afternoon. Electric bikes, however, do show a slight increase in activity in the morning.
+
+-   Casual riders use electric bikes more for shorter duration rides, and classic bikes for longer duration trips.
+
+-   Casual rides are more dispersed geographically than member rides. However, casual rides do show increased concentration rate in the Loop and Near North neighborhoods during daytime hours, as well as on weekends. 
 
 ### Member Findings
 
@@ -3261,21 +3180,17 @@ Our data illustrates several ways that riders and annual members use bikes diffe
 
 -   Members use classic bikes more frequently for shorter-duration rides and electric bikes for longer duration rides.
 
-### Casual Rider Findings
+### Crossover Findings
 
--   Casual rides are longer in duration.
+-   Both groups travel roughly the same distances.
 
--   Casual rides exhibit more variability in duration. 
+-   Both groups exhibit similar seasonal trends throughout the year, with peak ridership occurring during Q3 (July - September) and the lowest activity occurring during Q1 (January - March).
 
--   Casual ridership is more strongly affected by seasonal changes than member ridership. In particular, electric bikes vary more in quarter-to-quarter rides than classic bikes, which show more stable ridership. 
+-   Both groups exhibit peak ridership in the afternoons.
 
--   Casual ridership is higher on weekends (Friday through Sunday), and lower on weekdays (Monday through Thursday). Classic bikes, in particular, show greater day-of-week variability, while electric bikes maintain steadier rates throughout the week.
+-   Both groups ride electric bikes more than classic bikes. 
 
--   Throughout the day, casual ridership builds steadily, from morning to midday, before peaking in the afternoon. Electric bikes, however, do show a slight increase in activity in the morning.
-
--   Casual riders use electric bikes more for shorter duration rides, and classic bikes for longer duration trips.
-
--   Casual rides are more dispersed geographically than member rides. However, casual rides do show increased concentration rate in the Loop and Near North neighborhoods during daytime hours, as well as on weekends. 
+-   For electric bike rides, both groups show similar concentration rates for shorter rides. Electric bike distribution for both groups is also characterized by a series of sharp peaks at specific distance intervals, as shown in the plot for Bike Distribution (Meter By Meter).
 
 ## Action Items
 
@@ -3285,39 +3200,39 @@ The capstone project prompt asks students to identify opportunities for converti
 
 First, strategic efforts to convert casual riders to members should account for behavioral trends that are distinct to casual riders. Focusing on these patterns will enable us to reach a broader audience and deliver messaging that is relevant to how casual riders actually use the service. Specific areas of focus relevant to this approach are listed below:
 
--   **Leverage casual riders' preference for longer duration rides.** Example: Framing membership as an opportunity for more low-pressure, exploratory rides.
+-   Leverage casual riders' preference for longer duration rides. Example: Framing membership as an opportunity for more low-pressure, exploratory rides.
 
--   **Leverage casual riders' seasonal variability.** Example: Running a promotion during the summer for membership signups.
+-   Leverage casual riders' seasonal variability. Example: Running a promotion during the summer for membership signups.
 
--   **Leverage casual riders' higher daytime activity patterns.** Example: Running a promotion for membership signups specific to midday/early afternoon.
+-   Leverage casual riders' higher daytime activity patterns. Example: Running a promotion for membership signups specific to midday/early afternoon.
 
--   **Leverage casual riders' higher ride concentration rates during weekends.** Example: Offering weekend-specific perks for new member signups.
+-   Leverage casual riders' higher ride concentration rates during weekends. Example: Offering weekend-specific perks for new member signups.
 
--   **Leverage casual riders' preference for classic bikes during longer duration rides.** Example: Highlighting access to classic bikes through membership signups.
+-   Leverage casual riders' preference for classic bikes during longer duration rides. Example: Highlighting access to classic bikes through membership signups.
 
-### **Leverage Member Behavior**
+### Leverage Member Behavior
 
 Focusing on casual rider behavior alone, however, provides an incomplete picture of membership realities. Strategic effort need to also take into account behavioral trends that are distinct to members as well. Specific areas of focus are listed below:
 
--   **Leverage members' preference for shorter duration rides.** Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).
+-   Leverage members' preference for shorter duration rides. Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).
 
--   **Leverage members' seasonal consistency.** Example: Highlighting membership as ideal for riders who bike throughout the year.
+-   Leverage members' seasonal consistency. Example: Highlighting membership as ideal for riders who bike throughout the year.
 
--   **Leverage members' increased activity during weekdays.** Example: Running a promotion centered on weekday rides.
+-   Leverage members' increased activity during weekdays. Example: Running a promotion centered on weekday rides.
 
--   **Leverage members' increased activity during morning and afternoons.** Example: Highlighting membership as a convenient option for morning and afternoon commutes.
+-   Leverage members' increased activity during morning and afternoons. Example: Highlighting membership as a convenient option for morning and afternoon commutes.
 
-### **Leverage Crossover** **Behavior**
+### Leverage Crossover Behavior
 
 In addition to accounting for distinct member and casual rider behaviors, we can further strengthen our strategic approach by targeting affinity behaviors (i.e. patterns where both rider groups show similarity).
 
--   **Leverage both rider groups' increased activity during the summer.** Example: Running a membership signup initiative during Q3.  
+-   Leverage both rider groups' increased activity during the summer. Example: Running a membership signup initiative during Q3.  
 
--   **Leverage both rider groups' increased activity during afternoons.** Example: Positioning membership as a practical option for afternoon commutes.
+-   Leverage both rider groups' increased activity during afternoons. Example: Positioning membership as a practical option for afternoon commutes.
 
--   **Leverage casual riders' morning electric bike usage, which closely resembles member patterns.** Example: Offering a membership trial for morning electric bike rides.
+-   Leverage casual riders' morning electric bike usage, which closely resembles member patterns. Example: Offering a membership trial for morning electric bike rides.
 
--   **Leverage casual riders' Q4 classic bike usage, which also resembles member patterns.** Example: Running a holiday campaign centered around classic bikes.
+-   Leverage casual riders' Q4 classic bike usage, which also resembles member patterns. Example: Running a holiday campaign centered around classic bikes.
 
 ## Improvements
 
