@@ -1,5 +1,5 @@
 ---
-title: "Google Analytics Capstone Project: How does a bike share navigate speedy success?"
+title: "Google Analytics Capstone Project"
 author: "Aaron Liu"
 date: "2025-11-27"
 output: html_document
@@ -153,75 +153,75 @@ I then proceeded to explore my raw dataset using SQL. As a first step, I queried
 
 Here are metrics from the raw data set:
 
-**🆔 Ride ID:** Data on Ride IDs appears to be complete.
+**Ride ID:** Data on Ride IDs appears to be complete.
 
--   ✅ Results in data set: 8,511,437
+-   Results in data set: 8,511,437
 
--   ✅ Unique Ride IDs: 8,511,437
+-   Unique Ride IDs: 8,511,437
 
--   ✅ Null Ride IDs: 0
+-   Null Ride IDs: 0
 
-**🚲 Vehicle Type:** Data appears to be complete. No major cleaning required.
+**Vehicle Type:** Data appears to be complete. No major cleaning required.
 
--   ✅ Unique values for vehicle types: 2 (Electric Bikes, Classic Bikes)
+-   Unique values for vehicle types: 2 (Electric Bikes, Classic Bikes)
 
--   ✅ Null values for vehicle types: 0
+-   Null values for vehicle types: 0
 
-**🚴 Rider Type:** Data appears to be complete. No major cleaning required.
+**Rider Type:** Data appears to be complete. No major cleaning required.
 
--   ✅ Unique values for member_casual column: 2 (Member group, Casual Rider group)
+-   Unique values for member_casual column: 2 (Member group, Casual Rider group)
 
--   ✅ Null values for member_casual: 0
+-   Null values for member_casual: 0
 
-**🪧 Station Names/Station IDs:** Duplicate station names + duplicate station IDs will need to be transformed in order to ensure that station IDs correlate to specific station names. However, null values will not be filtered out of the data set, as null values comprise a significant portion of station name/ID values and removal may introduce bias in results.
+**Station Names/Station IDs:** Duplicate station names + duplicate station IDs will need to be transformed in order to ensure that station IDs correlate to specific station names. However, null values will not be filtered out of the data set, as null values comprise a significant portion of station name/ID values and removal may introduce bias in results.
 
--   🚨 Number of unique starting stations logged by name: 1,969
+-   Number of unique starting stations logged by name: 1,969
 
--   🚨 Number of unique starting stations logged by station ID: 3,498
+-   Number of unique starting stations logged by station ID: 3,498
 
--   🚨 Number of ending stations logged by name: 1,973
+-   Number of ending stations logged by name: 1,973
 
--   🚨 Number of ending stations logged by station ID: 3,517
+-   Number of ending stations logged by station ID: 3,517
 
--   🚨 Number of null values for starting stations (same values for both name and ID): 1,740,714
+-   Number of null values for starting stations (same values for both name and ID): 1,740,714
 
--   🚨 Number of null values for ending stations (same value for both name and ID): 1,740,714
+-   Number of null values for ending stations (same value for both name and ID): 1,740,714
 
-**🌎 Geo-location Coordinates:** Unlike station names/IDs, there are only a handful of end coordinates with null values – null values can be safely filtered out. End longitude coordinates exhibit outliers well outside of range of the Chicago Metropolitan area, suggesting faulty data that will need to be filtered. Lastly, decimal precision ranges from broad to precise – coordinate decimals can benefit from normalization as well.
+**Geo-location Coordinates:** Unlike station names/IDs, there are only a handful of end coordinates with null values – null values can be safely filtered out. End longitude coordinates exhibit outliers well outside of range of the Chicago Metropolitan area, suggesting faulty data that will need to be filtered. Lastly, decimal precision ranges from broad to precise – coordinate decimals can benefit from normalization as well.
 
--   ✅ Number of null starting coordinates: 0
+-   Number of null starting coordinates: 0
 
--   🚨 Number of null ending coordinates: 8,899
+-   Number of null ending coordinates: 8,899
 
 -   Starting latitude:
 
-    -   ✅ Range: 41.64 to 42.07
+    -   Range: 41.64 to 42.07
 
-    -   🚨 Decimal precision: 1 to 15
+    -   Decimal precision: 1 to 15
 
 -   Starting longitude
 
-    -   ✅ Range: -87.91 to -87.52
+    -   Range: -87.91 to -87.52
 
-    -   🚨 Decimal precision: 1 to 14
+    -   Decimal precision: 1 to 14
 
 -   Ending latitude
 
-    -   🚨 Range: 16.06 to 87.96
+    -   Range: 16.06 to 87.96
 
-    -   🚨 Decimal precision: 1 to 15
+    -   Decimal precision: 1 to 15
 
 -   Range for ending longitude:
 
-    -   🚨 Range: -144.05 to 87.96
+    -   Range: -144.05 to 87.96
 
-    -   🚨 Decimal precision: 1 to 14
+    -   Decimal precision: 1 to 14
 
 **⏱️ Ride Times:** Minimum ride time show as a negative value, suggesting faulty data that will need to be cleaned at this stage. Maximum Ride Time elapses for more than a day, suggesting outliers that could skew overall metrics.
 
--   🚨 Minimum Ride Time: -56:01:302
+-   Minimum Ride Time: -56:01:302
 
--   🚨 Maximum Ride Time: 02:14:54:011
+-   Maximum Ride Time: 02:14:54:011
 
 ## Inconsistent Station Names/IDs
 
@@ -575,75 +575,75 @@ ORDER BY
 
 Once I had created the dataset, I used my previous queries to explore the cleaned data.
 
-**🆔 Ride ID:**
+**Ride ID:**
 
--   ✅ Results in cleaned data set: 5,001,023
+-   Results in cleaned data set: 5,001,023
 
--   ✅ Unique Ride IDs: 5,001,023
+-   Unique Ride IDs: 5,001,023
 
--   ✅ Null Ride IDs: 0
+-   Null Ride IDs: 0
 
-**🚲 Vehicle Type:**
+**Vehicle Type:**
 
--   ✅ Unique values for vehicle types: 2 (electric bikes, classic bikes)
+-   Unique values for vehicle types: 2 (electric bikes, classic bikes)
 
--   ✅ Null values for vehicle types: 0
+-   Null values for vehicle types: 0
 
-**🚴 Rider Type:**
+**Rider Type:**
 
--   ✅ Unique values for member_casual column: 2 (members, casual riders)
+-   Unique values for member_casual column: 2 (members, casual riders)
 
--   ✅ Null values for member_casual: 0
+-   Null values for member_casual: 0
 
-**🪧 Station Names/Station IDs:**
+**Station Names/Station IDs:**
 
--   ✅ Number of unique starting stations logged by name: 669
+-   Number of unique starting stations logged by name: 669
 
--   ✅ Number of unique starting stations logged by station ID: 669
+-   Number of unique starting stations logged by station ID: 669
 
--   ✅ Number of ending stations logged by name: 675
+-   Number of ending stations logged by name: 675
 
--   ✅ Number of ending stations logged by station ID: 675
+-   Number of ending stations logged by station ID: 675
 
--   🚨 Number of null values for starting stations (same values for both name and ID): 978,512
+-   Number of null values for starting stations (same values for both name and ID): 978,512
 
--   🚨 Number of null values for ending stations (same value for both name and ID): 978,512
+-   Number of null values for ending stations (same value for both name and ID): 978,512
 
-**🌎 Geo-location Coordinates:**
+**Geo-location Coordinates:**
 
--   ✅ Number of null starting coordinates: 0
+-   Number of null starting coordinates: 0
 
--   ✅ Number of null ending coordinates: 0
+-   Number of null ending coordinates: 0
 
 -   Starting latitude:
 
-    -   ✅ Range: 41.80839 to 42.001824
+    -   Range: 41.80839 to 42.001824
 
-    -   ✅ Decimal precision: 1 to 6
+    -   Decimal precision: 1 to 6
 
 -   Starting longitude
 
-    -   ✅ Range: -87.709189 to -87.58
+    -   Range: -87.709189 to -87.58
 
-    -   ✅ Decimal precision: 1 to 6
+    -   Decimal precision: 1 to 6
 
 -   Ending latitude
 
-    -   ✅ Range: 41.808038 to 42.001785
+    -   Range: 41.808038 to 42.001785
 
-    -   ✅ Decimal precision: 1 to 6
+    -   Decimal precision: 1 to 6
 
 -   Range for ending longitude:
 
-    -   ✅ Range: -87.708887 to -87.58
+    -   Range: -87.708887 to -87.58
 
-    -   ✅ Decimal precision: 1 to 6
+    -   Decimal precision: 1 to 6
 
-    **⏱️ Ride Times:**
+    **Ride Times:**
 
--   ✅ Minimum Ride Time: 00:01:00.03
+-   Minimum Ride Time: 00:01:00.03
 
--   ✅ Maximum Ride Time: 00:44:48.921
+-   Maximum Ride Time: 00:44:48.921
 
 # Presenting The Data
 
