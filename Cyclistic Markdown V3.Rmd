@@ -1,7 +1,7 @@
 ---
 title: "Google Analytics Capstone Project"
 author: "Aaron Liu"
-date: "2025-11-27"
+date: "2025-11-28"
 output: html_document
 ---
 
@@ -31,18 +31,14 @@ For analysis, ride trends were measured by calculating several key metrics: ride
 
 | Time Frame | Description | Analyses Included |
 |:-----------------:|:----------------------------:|:---------------------:|
-| 12 Months | Metrics derived from the entire dataset. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map. |
-| Per Quarter | Metrics segmented by quarter. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map. |
-| Day Of Week | Metrics segmented by day of week. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map. |
-| Hour Of Day | Metrics segmented by hour of day. | Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map (per 3 hour segment). |
-| Per Minute | Metrics segmented by time (1-minute intervals). | Ride Concentration, Average Distance, Bike Distribution. |
-| Per 100 Meters | Metrics segmented by distance (100-meter intervals). | Ride Concentration, Average Time, Bike Distribution. |
-
-With this framework in mind, the first step was to compile the raw dataset.
+| 12 Months | Metrics derived from the entire dataset. | *Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map.* |
+| Per Quarter | Metrics segmented by quarter. | *Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map.* |
+| Day Of Week | Metrics segmented by day of week. | *Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map.* |
+| Hour Of Day | Metrics segmented by hour of day. | *Ride Concentration, Average Distance, Average Time, Bike Distribution, Geospatial Heat Map.* |
+| Per Minute | Metrics segmented by time (1-minute intervals). | *Ride Concentration, Average Distance, Bike Distribution.* |
+| Per 100 Meters | Metrics segmented by distance (100-meter intervals). | *Ride Concentration, Average Time, Bike Distribution.* |
 
 # Processing The Data
-
-## Compiling The Raw Dataset
 
 Google instructs users to process the .csv’s using Google Sheets and/or Microsoft Excel. However, the .csv’s supplied by Divvy were too large to process using Google Workspace tools, as they exceeded Google [internal cap](https://www.thebricks.com/resources/guide-how-to-bypass-google-sheets-import-limit) on spreadsheet imports. To work around upload limitations, I ended up using SQL for data cleaning, processing and aggregation. Specifically, the cloud data warehouse MotherDuck offers a free plan that allows for 10 GB of storage, which was enough to accommodate for the scope of the joined data.
 
@@ -132,9 +128,9 @@ CREATE OR REPLACE TABLE divvytripdata AS (
 )
 ```
 
-## Exploring The Raw Data
+## Assessing The Raw Data
 
-I then proceeded to explore my raw dataset using SQL. As a first step, I queried for null values, outlier values, and tested for duplicate values relating to station IDs in particular. Here are metrics from the raw data set:
+I then proceeded to explore my raw dataset using SQL. As a first step, I queried for null values, outlier values, and tested for duplicate values relating to station IDs in particular. Here are the results:
 
 | Field | Metric | Value | Finding |
 |:----------------:|:----------------:|:----------------:|:----------------:|
@@ -164,9 +160,9 @@ I then proceeded to explore my raw dataset using SQL. As a first step, I queried
 | Ride Time | Minimum Ride Times | -56:01:302 | Cleaning required. Minimum ride time show as a negative value, suggesting faulty data. |
 | Ride Time | Maximum Ride Times | 02:14:54:011 | Cleaning required. Maximum Ride Time elapses for more than a day, suggesting outliers that could skew overall metrics. |
 
-## Inconsistent Station Names/IDs
+### Inconsistent Station Names/IDs
 
-### Station Names
+#### Station Names
 
 I then drafted further queries to identify inconsistent station names per station ID, then visually reviewed the results. These queries produced 238 unique station names where the associated station ID referenced multiple names. Root causes appeared to stem from the following:
 
@@ -174,7 +170,7 @@ I then drafted further queries to identify inconsistent station names per statio
 
 2.  Public bike racks sharing the same station IDs as regular stations.
 
-For these set of stations, I also pulled total rides per station and found that some of the stations exhibited ridership numbers in the tens of thousands -- this convinced me that the safest course of action was to transform these station names to resolve naming inconsistencies, rather than removing them outright from the data-set.
+For these set of stations, I also pulled total rides per station and found that some of the stations exhibited ridership numbers in the tens of thousands -- this convinced me that the safest course of action was to transform these station names to resolve naming inconsistencies, rather than removing them outright from the dataset.
 
 ``` sql
 --This table explores station IDs in raw dataset to ensure start station names are unique to ID.
@@ -220,7 +216,7 @@ GROUP BY d.end_station_id, d.end_station_name
 ORDER BY d.end_station_id, d.end_station_name
 ```
 
-### Station IDs
+#### Station IDs
 
 I also queried for duplicate station IDs per station name. These queries returned 3,256 unique starting station IDs that shared a common name, and 3,286 unique end station IDs that shared a common name.
 
@@ -274,7 +270,7 @@ To generate the cleaned dataset, I structured my query to include multiple commo
 
 ### Geo-location Data:
 
-Final geo-location data was cleaned using the Interquartile Range (IQR) method. Specifically, I wrote a series of CTE's that calculated the upper and lower bounds for geo-location coordinates within my data, then removed all results that were 1.5 times outside those calculated bounds. The intention here in applying IQR was two fold: 1. to remove erroneous coordinates and 2. to filter out general outliers as well so that down-the-line metrics more closely reflected general user behavior.
+Final geospatial data was cleaned using the Interquartile Range (IQR) method. Specifically, I wrote a series of CTE's that calculated the upper and lower bounds for geospatial coordinates within my data, then removed all results that were 1.5 times outside those calculated bounds. The intention here in applying IQR was two fold: 1. to remove erroneous coordinates and 2. to filter out general outliers as well so that down-the-line metrics more closely reflected general user behavior.
 
 ### Ride Times
 
@@ -514,8 +510,6 @@ ORDER BY
 
 ### Assessing The Cleaned Data
 
-Below are metrics for the cleaned dataset:
-
 | Field | Metric | Raw Values | Cleaned Values |
 |:----------------:|:----------------:|:----------------:|:----------------:|
 | Ride ID | Results in data set | 8,511,437 | 5,001,023 |
@@ -544,9 +538,7 @@ Below are metrics for the cleaned dataset:
 | Ride Time | Minimum Ride Times | -56:01:302 | 00:01:00.03 |
 | Ride Time | Maximum Ride Times | 02:14:54:011 | 00:44:48.921 |
 
-# Presenting The Data
-
-## Preparing The Metrics
+# Exploring The Data
 
 After creating the cleaned dataset, I took a two-stage approach towards analyzing the data.
 
@@ -3142,7 +3134,7 @@ meter_by_meter_cbike_plot
 
 For shorter distance electric bike trips, both groups register similar concentration rates. Longer distance electric bike rides, however, show higher relative activity for members. Shorter distance classic bike rides, meanwhile, also show higher concentration rates for members, relative to casual riders. Longer distance classic bike rides show higher relative activity for casual riders.
 
-# Presenting The Findings
+# Analyzing The Data
 
 Our data illustrates several ways that riders and annual members use bikes differently. Below is a summary of key findings regarding rider behavior and suggested actions for converting casual riders to members based on our findings. 
 
@@ -3200,39 +3192,65 @@ The capstone project prompt asks students to identify opportunities for converti
 
 First, strategic efforts to convert casual riders to members should account for behavioral trends that are distinct to casual riders. Focusing on these patterns will enable us to reach a broader audience and deliver messaging that is relevant to how casual riders actually use the service. Specific areas of focus relevant to this approach are listed below:
 
--   Leverage casual riders' preference for longer duration rides. Example: Framing membership as an opportunity for more low-pressure, exploratory rides.
+-   Leverage casual riders' preference for longer duration rides.
 
--   Leverage casual riders' seasonal variability. Example: Running a promotion during the summer for membership signups.
+    -   *Example: Framing membership as an opportunity for more low-pressure, exploratory rides.*
 
--   Leverage casual riders' higher daytime activity patterns. Example: Running a promotion for membership signups specific to midday/early afternoon.
+-   Leverage casual riders' seasonal variability.
 
--   Leverage casual riders' higher ride concentration rates during weekends. Example: Offering weekend-specific perks for new member signups.
+    -   *Example: Running a promotion during the summer for membership signups.*
 
--   Leverage casual riders' preference for classic bikes during longer duration rides. Example: Highlighting access to classic bikes through membership signups.
+-   Leverage casual riders' higher daytime activity patterns.
+
+    -   *Example: Running a promotion for membership signups specific to midday/early afternoon.*
+
+-   Leverage casual riders' higher ride concentration rates during weekends.
+
+    -   *Example: Offering weekend-specific perks for new member signups.*
+
+-   Leverage casual riders' preference for classic bikes during longer duration rides.
+
+    -   *Example: Highlighting access to classic bikes through membership signups.*
 
 ### Leverage Member Behavior
 
 Focusing on casual rider behavior alone, however, provides an incomplete picture of membership realities. Strategic effort need to also take into account behavioral trends that are distinct to members as well. Specific areas of focus are listed below:
 
--   Leverage members' preference for shorter duration rides. Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).
+-   Leverage members' preference for shorter duration rides.
 
--   Leverage members' seasonal consistency. Example: Highlighting membership as ideal for riders who bike throughout the year.
+    -   *Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).*
 
--   Leverage members' increased activity during weekdays. Example: Running a promotion centered on weekday rides.
+-   Leverage members' seasonal consistency.
 
--   Leverage members' increased activity during morning and afternoons. Example: Highlighting membership as a convenient option for morning and afternoon commutes.
+    -    *Example: Highlighting membership as ideal for riders who bike throughout the year.*
+
+-   Leverage members' increased activity during weekdays.
+
+    -   *Example: Running a promotion centered on weekday rides.*
+
+-   Leverage members' increased activity during morning and afternoons.
+
+    -   *Example: Highlighting membership as a convenient option for morning and afternoon commutes.*
 
 ### Leverage Crossover Behavior
 
 In addition to accounting for distinct member and casual rider behaviors, we can further strengthen our strategic approach by targeting affinity behaviors (i.e. patterns where both rider groups show similarity).
 
--   Leverage both rider groups' increased activity during the summer. Example: Running a membership signup initiative during Q3.  
+-   Leverage both rider groups' increased activity during the summer.
 
--   Leverage both rider groups' increased activity during afternoons. Example: Positioning membership as a practical option for afternoon commutes.
+    -   *Example: Running a membership signup initiative during Q3.*  
 
--   Leverage casual riders' morning electric bike usage, which closely resembles member patterns. Example: Offering a membership trial for morning electric bike rides.
+-   Leverage both rider groups' increased activity during afternoons.
 
--   Leverage casual riders' Q4 classic bike usage, which also resembles member patterns. Example: Running a holiday campaign centered around classic bikes.
+    -   *Example: Positioning membership as a practical option for afternoon commutes.*
+
+-   Leverage casual riders' morning electric bike usage, which closely resembles member patterns.
+
+    -   *Example: Offering a membership trial for morning electric bike rides.*
+
+-   Leverage casual riders' Q4 classic bike usage, which also resembles member patterns.
+
+    -   *Example: Running a holiday campaign centered around classic bikes.*
 
 ## Improvements
 
@@ -3240,16 +3258,19 @@ This case study concludes with a discussion on the limitations of our data, as w
 
 ### Data Limitations
 
--   **Lack of user-level data:** Divvy bike share data does not include information on repeat rides specific to individual users (members or casual riders), nor does it include information with regards to dollar-cost of casual rides. This limits our visibility into rider behavior. 
-
-<!-- -->
-
--   **GPS inaccuracies:** Some geospatial coordinates may reflect broad approximations or default values that can arise from GPS errors – depending on scale, these inaccuracies may affect the precision of distance calculations. Future analysis of ride distances could bolster accuracy through more rigorous cleaning or through targeted random sampling.  
-
--   **Station Names/IDs:** While station names and IDs were cleaned to resolve duplicate values, station-level analysis was not conducted for this case study. The data cleaning processes established here nonetheless have been documented and can be used/expanded upon for future analysis attempts.
+-   Lack of user-level data
+    -   Divvy bike share data does not include information on repeat rides specific to individual users (members or casual riders), nor does it include information with regards to dollar-cost of casual rides. This limits our visibility into rider behavior. 
+-   GPS inaccuracies
+    -   Some geospatial coordinates may reflect broad approximations or default values that can arise from GPS errors – depending on scale, these inaccuracies may affect the precision of distance calculations. Future analysis of ride distances could bolster accuracy through more rigorous cleaning or through targeted random sampling.  
+-   Station Names/IDs
+    -   While station names and IDs were cleaned to resolve duplicate values, station-level analysis was not conducted for this case study. The data cleaning processes established here nonetheless have been documented and can be used/expanded upon for future analysis attempts.
 
 ### Method Limitations
 
--   **SQL/R Workflow:** Using SQL and R together created a workflow bottleneck that required re-running the SQL queries, then re-importing the results into R, in order to calculate metrics if they weren't initially included in the original results from SQL. Future workflows may benefit from consolidating analysis and visualization to a specific environment (for instance, using R to calculate metrics and generate visualizations).
+-   SQL/R Workflow
 
--   **R:** Several R code chunks define critical elements within each pipe, making global adjustments difficult. Towards the end of the project, some modularity was introduced through functions for tooltip formatting. Future workflows would benefit from utilizing a more modular approach to coding data visualizations from the outset.
+    -   Using SQL and R together created a workflow bottleneck that required re-running the SQL queries, then re-importing the results into R, in order to calculate metrics if they weren't initially included in the original results from SQL. Future workflows may benefit from consolidating analysis and visualization to a specific environment (for instance, using R to calculate metrics and generate visualizations).
+
+-   Hardcoding R elements
+
+    -   Several R code chunks define critical elements within each pipe, making global adjustments difficult. Towards the end of the project, some modularity was introduced through functions for tooltip formatting. Future workflows would benefit from utilizing a more modular approach to coding data visualizations from the outset.
