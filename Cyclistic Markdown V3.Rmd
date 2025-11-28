@@ -3194,23 +3194,23 @@ First, strategic efforts to convert casual riders to members should account for 
 
 -   Leverage casual riders' preference for longer duration rides.
 
-    -   *Example: Framing membership as an opportunity for more low-pressure, exploratory rides.*
+    *Example: Framing membership as an opportunity for more low-pressure, exploratory rides.*
 
 -   Leverage casual riders' seasonal variability.
 
-    -   *Example: Running a promotion during the summer for membership signups.*
+    *Example: Running a promotion during the summer for membership signups.*
 
 -   Leverage casual riders' higher daytime activity patterns.
 
-    -   *Example: Running a promotion for membership signups specific to midday/early afternoon.*
+    *Example: Running a promotion for membership signups specific to midday/early afternoon.*
 
 -   Leverage casual riders' higher ride concentration rates during weekends.
 
-    -   *Example: Offering weekend-specific perks for new member signups.*
+    *Example: Offering weekend-specific perks for new member signups.*
 
 -   Leverage casual riders' preference for classic bikes during longer duration rides.
 
-    -   *Example: Highlighting access to classic bikes through membership signups.*
+    *Example: Highlighting access to classic bikes through membership signups.*
 
 ### Leverage Member Behavior
 
@@ -3218,19 +3218,19 @@ Focusing on casual rider behavior alone, however, provides an incomplete picture
 
 -   Leverage members' preference for shorter duration rides.
 
-    -   *Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).*
+    *Example: Framing membership as a means to travel with purpose (commutes, errands, etc.).*
 
 -   Leverage members' seasonal consistency.
 
-    -    *Example: Highlighting membership as ideal for riders who bike throughout the year.*
+    *Example: Highlighting membership as ideal for riders who bike throughout the year.*
 
 -   Leverage members' increased activity during weekdays.
 
-    -   *Example: Running a promotion centered on weekday rides.*
+    *Example: Running a promotion centered on weekday rides.*
 
 -   Leverage members' increased activity during morning and afternoons.
 
-    -   *Example: Highlighting membership as a convenient option for morning and afternoon commutes.*
+    *Example: Highlighting membership as a convenient option for morning and afternoon commutes.*
 
 ### Leverage Crossover Behavior
 
@@ -3238,39 +3238,40 @@ In addition to accounting for distinct member and casual rider behaviors, we can
 
 -   Leverage both rider groups' increased activity during the summer.
 
-    -   *Example: Running a membership signup initiative during Q3.*  
+    *Example: Running a membership signup initiative during Q3.*  
 
 -   Leverage both rider groups' increased activity during afternoons.
 
-    -   *Example: Positioning membership as a practical option for afternoon commutes.*
+    *Example: Positioning membership as a practical option for afternoon commutes.*
 
 -   Leverage casual riders' morning electric bike usage, which closely resembles member patterns.
 
-    -   *Example: Offering a membership trial for morning electric bike rides.*
+    *Example: Offering a membership trial for morning electric bike rides.*
 
 -   Leverage casual riders' Q4 classic bike usage, which also resembles member patterns.
 
-    -   *Example: Running a holiday campaign centered around classic bikes.*
+    *Example: Running a holiday campaign centered around classic bikes.*
 
 ## Improvements
 
 This case study concludes with a discussion on the limitations of our data, as well as opportunities to improve upon our existing methodologies. 
 
-### Data Limitations
+-   **Lack of user-level data**
 
--   Lack of user-level data
-    -   Divvy bike share data does not include information on repeat rides specific to individual users (members or casual riders), nor does it include information with regards to dollar-cost of casual rides. This limits our visibility into rider behavior. 
--   GPS inaccuracies
-    -   Some geospatial coordinates may reflect broad approximations or default values that can arise from GPS errors – depending on scale, these inaccuracies may affect the precision of distance calculations. Future analysis of ride distances could bolster accuracy through more rigorous cleaning or through targeted random sampling.  
--   Station Names/IDs
-    -   While station names and IDs were cleaned to resolve duplicate values, station-level analysis was not conducted for this case study. The data cleaning processes established here nonetheless have been documented and can be used/expanded upon for future analysis attempts.
+    Divvy bike share data does not include information on repeat rides specific to individual users (members or casual riders), nor does it include information with regards to dollar-cost of casual rides. This limits our visibility into rider behavior. 
 
-### Method Limitations
+-   **GPS inaccuracies**
 
--   SQL/R Workflow
+    Some geospatial coordinates may reflect broad approximations or default values that can arise from GPS errors – depending on scale, these inaccuracies may affect the precision of distance calculations. Future analysis of ride distances could bolster accuracy through more rigorous cleaning or through targeted random sampling.  
 
-    -   Using SQL and R together created a workflow bottleneck that required re-running the SQL queries, then re-importing the results into R, in order to calculate metrics if they weren't initially included in the original results from SQL. Future workflows may benefit from consolidating analysis and visualization to a specific environment (for instance, using R to calculate metrics and generate visualizations).
+-   **Station Names/IDs**
 
--   Hardcoding R elements
+    While station names and IDs were cleaned to resolve duplicate values, station-level analysis was not conducted for this case study. The data cleaning processes established here nonetheless have been documented and can be used/expanded upon for future analysis attempts.
 
-    -   Several R code chunks define critical elements within each pipe, making global adjustments difficult. Towards the end of the project, some modularity was introduced through functions for tooltip formatting. Future workflows would benefit from utilizing a more modular approach to coding data visualizations from the outset.
+-   **SQL/R Workflow**
+
+    Using SQL and R together created a workflow bottleneck that required re-running the SQL queries, then re-importing the results into R, in order to calculate metrics if they weren't initially included in the original results from SQL. Future workflows may benefit from consolidating analysis and visualization to a specific environment (for instance, using R to calculate metrics and generate visualizations).
+
+-   **Hardcoding R elements**
+
+    Several R code chunks define critical elements within each pipe, making global adjustments difficult. Towards the end of the project, some modularity was introduced through functions for tooltip formatting. Future workflows would benefit from utilizing a more modular approach to coding data visualizations from the start.
