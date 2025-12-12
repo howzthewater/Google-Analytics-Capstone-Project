@@ -1,5 +1,5 @@
 ---
-title: "Google Analytics Capstone Project"
+title: "Google Data Analytics Capstone Project"
 author: "Aaron Liu"
 date: "2025-11-28"
 output: html_document
