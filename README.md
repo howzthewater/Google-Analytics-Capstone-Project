@@ -14,5 +14,5 @@ This project uses SQL for data cleaning, compilation, and analysis, and R for vi
 
 ## Links:
 
-- [Google Data Analytics Capstone Project (Link)](Cyclistic-Markdown-V3.html)
+- [Google Data Analytics Capstone Project (Link)](https://howzthewater.github.io/Google-Analytics-Capstone-Project/Cyclistic-Markdown-V3.html)
 - [LinkedIn](https://www.linkedin.com/in/aaron-liu-81192952)
